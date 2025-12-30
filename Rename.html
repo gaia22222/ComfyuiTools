@@ -1,0 +1,1442 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visual Renamer (Web V29.4 - 詳細日誌版)</title>
+    
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        bg: {
+                            main: '#09090b',    
+                            panel: '#18181b',   
+                            surface: '#27272a', 
+                            hover: '#3f3f46',   
+                        },
+                        accent: {
+                            DEFAULT: '#3b82f6', 
+                            hover: '#2563eb',
+                            dim: 'rgba(59, 130, 246, 0.1)',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- 引入 SortableJS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+
+    <!-- 引入 JSZip 與 FileSaver -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+    <style>
+        :root {
+            --slot-size: 140px;
+        }
+
+        body {
+            background-color: #09090b;
+            color: #e4e4e7; /* zinc-200 */
+            user-select: none;
+        }
+        
+        /* 隱藏滾動條但保留功能 */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent; 
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #3f3f46; 
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #52525b; 
+        }
+
+        /* === 圖片卡片樣式 === */
+        .img-slot {
+            width: var(--slot-size);
+            height: var(--slot-size);
+            background-color: #18181b; /* zinc-900 */
+            border-radius: 8px;
+            position: relative;
+            cursor: pointer;
+            transition: box-shadow 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        /* 懸浮效果 */
+        .img-slot:hover {
+            background-color: #27272a; /* zinc-800 */
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            border: 1px solid #4b5563;
+        }
+
+        /* === 拖曳樣式 (原生模式) === */
+        .sortable-ghost {
+            opacity: 1 !important; 
+            background-color: rgba(59, 130, 246, 0.1) !important;
+            border: 2px dashed #3b82f6 !important; 
+            box-shadow: none !important;
+            transform: none !important; 
+        }
+        
+        .sortable-ghost > * {
+            opacity: 0; 
+        }
+
+        /* 選取狀態 */
+        .img-slot.selected {
+            box-shadow: 0 0 0 2px #3b82f6;
+        }
+
+        /* 序號標記 */
+        .index-badge {
+            position: absolute;
+            top: 6px;
+            left: 6px;
+            padding: 2px 6px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: rgba(255, 255, 255, 0.9);
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            z-index: 10;
+            pointer-events: none;
+        }
+        .img-slot.selected .index-badge {
+            background-color: #3b82f6;
+            color: white;
+        }
+
+        /* 移除按鈕 */
+        .remove-btn {
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            width: 22px;
+            height: 22px;
+            background-color: rgba(0,0,0,0.6);
+            color: #d4d4d8;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            opacity: 0;
+            transition: all 0.2s;
+            z-index: 10;
+        }
+        .remove-btn:hover {
+            background-color: #ef4444; 
+            color: white;
+        }
+        .img-slot:hover .remove-btn {
+            opacity: 1;
+        }
+
+        /* 圖片本身 */
+        .thumb-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover; 
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+
+        /* 分隔桿 */
+        #resizer-bar {
+            width: 2px;
+            background-color: #27272a; 
+            cursor: col-resize;
+            transition: background-color 0.2s;
+            z-index: 40;
+            flex-shrink: 0;
+            position: relative;
+        }
+        #resizer-bar:hover, #resizer-bar.active {
+            background-color: #3b82f6;
+        }
+        #resizer-bar::after {
+            content: '';
+            position: absolute;
+            left: -6px;
+            right: -6px;
+            top: 0;
+            bottom: 0;
+            z-index: 10;
+        }
+
+        /* 滑桿樣式 */
+        input[type=range] {
+            -webkit-appearance: none;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 12px;
+            width: 12px;
+            border-radius: 50%;
+            background: #d4d4d8;
+            cursor: pointer;
+            margin-top: -4px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+        }
+        input[type=range]::-webkit-slider-thumb:hover {
+            background: #fff;
+            transform: scale(1.2);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #3f3f46;
+            border-radius: 2px;
+        }
+
+        /* 開關樣式 */
+        .toggle-switch {
+            position: relative;
+            width: 36px;
+            height: 20px;
+            background-color: #3f3f46;
+            border-radius: 9999px;
+            transition: 0.3s;
+        }
+        .toggle-dot {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 16px;
+            height: 16px;
+            background-color: white;
+            border-radius: 50%;
+            transition: 0.3s;
+        }
+        input:checked ~ .toggle-switch {
+            background-color: #3b82f6;
+        }
+        input:checked ~ .toggle-switch .toggle-dot {
+            transform: translateX(16px);
+        }
+        /* 特別顏色給特定開關 */
+        input#cleanMetaCheckbox:checked ~ .toggle-switch {
+            background-color: #10b981;
+        }
+        input#hoverPreviewCheckbox:checked ~ .toggle-switch {
+            background-color: #8b5cf6; /* 紫色 */
+        }
+
+        /* 輸入框聚焦特效 */
+        .input-focus-ring:focus-within {
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+            border-color: #3b82f6;
+        }
+        
+        /* 下拉選單樣式 */
+        .custom-select {
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+            background-position: right 0.2rem center;
+            background-repeat: no-repeat;
+            background-size: 1.5em 1.5em;
+            padding-right: 2rem;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        /* 操作日誌面板 */
+        #historyPanel {
+            position: absolute;
+            bottom: 60px;
+            left: 12px;
+            width: 260px;
+            max-height: 360px; /* 增加高度 */
+            background-color: #18181b;
+            border: 1px solid #3f3f46;
+            border-radius: 8px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+            z-index: 50;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .history-item {
+            padding: 10px 12px;
+            border-bottom: 1px solid #27272a;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .history-item:last-child {
+            border-bottom: none;
+        }
+        .history-item:hover {
+            background-color: #27272a;
+        }
+        .history-item:active {
+            background-color: #3f3f46;
+        }
+        .history-time {
+            font-size: 10px;
+            color: #71717a;
+            font-family: monospace;
+            margin-top: 2px;
+        }
+        .history-action {
+            font-size: 12px;
+            color: #e4e4e7;
+            font-weight: 600;
+        }
+        .history-detail {
+            font-size: 11px;
+            color: #a1a1aa; /* zinc-400 */
+            line-height: 1.2;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 180px;
+        }
+        .history-label {
+            font-size: 9px;
+            color: #f87171; /* red-400 */
+            text-transform: uppercase;
+            font-weight: bold;
+            background: rgba(239, 68, 68, 0.1);
+            padding: 1px 4px;
+            border-radius: 3px;
+            letter-spacing: 0.5px;
+        }
+    </style>
+</head>
+<body class="flex flex-col h-screen overflow-hidden text-sm">
+
+    <!-- 頂部列 -->
+    <header class="h-12 bg-bg-panel border-b border-zinc-800 flex items-center justify-between px-4 shrink-0 z-30">
+        <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2 text-zinc-100 font-semibold tracking-wide">
+                <svg class="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                Visual Renamer
+            </div>
+            <span class="px-1.5 py-0.5 rounded text-[10px] bg-zinc-800 text-zinc-500 border border-zinc-700">V29.4</span>
+        </div>
+
+        <div class="flex items-center gap-4">
+            
+            <!-- 排序工具 -->
+            <div class="hidden md:flex items-center gap-1 bg-zinc-900 rounded p-0.5 border border-zinc-700">
+                <button onclick="sortImages('name')" class="px-2 py-0.5 text-xs text-zinc-400 hover:text-white hover:bg-zinc-700 rounded transition" title="依檔名排序">檔名</button>
+                <button onclick="sortImages('date')" class="px-2 py-0.5 text-xs text-zinc-400 hover:text-white hover:bg-zinc-700 rounded transition" title="依日期排序">日期</button>
+                <button onclick="sortImages('reverse')" class="px-2 py-0.5 text-xs text-zinc-400 hover:text-white hover:bg-zinc-700 rounded transition" title="反向排序">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"></path></svg>
+                </button>
+            </div>
+
+            <div class="h-3 w-px bg-zinc-700 hidden md:block"></div>
+
+            <!-- 懸停預覽開關 (預設開啟) -->
+            <label class="flex items-center gap-2 cursor-pointer" title="滑鼠指到圖片即顯示預覽">
+                <input type="checkbox" id="hoverPreviewCheckbox" class="sr-only" checked>
+                <span class="text-[10px] uppercase font-bold text-zinc-500 hover:text-zinc-300 transition">懸停預覽</span>
+                <div class="toggle-switch scale-75 origin-left">
+                    <div class="toggle-dot"></div>
+                </div>
+            </label>
+
+            <div class="h-3 w-px bg-zinc-700 hidden md:block"></div>
+
+            <!-- 網格大小 -->
+            <div class="flex items-center gap-2" title="調整縮圖大小">
+                <svg class="w-3.5 h-3.5 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+                <input type="range" id="gridSizeSlider" min="80" max="250" value="250" class="w-20">
+            </div>
+            
+            <div class="h-3 w-px bg-zinc-700"></div>
+
+            <!-- 視圖切換 -->
+            <button onclick="togglePreviewPane()" id="togglePreviewBtn" class="text-zinc-400 hover:text-white transition-colors flex items-center gap-1.5" title="切換側邊欄">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path></svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- 主工作區 -->
+    <div class="flex-1 flex overflow-hidden relative bg-bg-main">
+        
+        <!-- 左側：網格區 -->
+        <div class="flex-1 overflow-y-auto custom-scrollbar p-6 relative" id="leftPanel" tabindex="0">
+            <div id="gridContainer" class="flex flex-wrap gap-4 content-start min-h-[200px]">
+                
+                <!-- 空狀態提示 -->
+                <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none" id="emptyMsg">
+                    <div class="flex flex-col items-center opacity-40">
+                        <svg class="w-12 h-12 text-zinc-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                        <p class="text-zinc-400 font-medium">拖曳圖片至此</p>
+                        <p class="text-xs text-zinc-600 mt-1">支援鍵盤快捷鍵：Del 刪除, Ctrl+Z 復原</p>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- 分隔桿 -->
+        <div id="resizer-bar" class="hidden md:block"></div>
+
+        <!-- 右側：預覽區 -->
+        <div id="previewPane" style="width: 320px;" class="bg-bg-panel border-l border-zinc-800 flex flex-col z-20 hidden md:flex flex-shrink-0">
+            <!-- 標題 -->
+            <div class="h-10 border-b border-zinc-800 flex items-center px-4 text-xs font-semibold text-zinc-500 uppercase tracking-wider bg-bg-panel select-none">
+                預覽資訊 (Preview)
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-5 custom-scrollbar" id="previewContent">
+                
+                <!-- 無選取 -->
+                <div class="h-full flex flex-col items-center justify-center text-zinc-600 select-none" id="noSelectionMsg">
+                    <p class="text-xs">未選取任何項目</p>
+                </div>
+
+                <!-- 資訊內容 -->
+                <div id="selectionInfo" class="hidden flex-col gap-5 animate-fadeIn">
+                    
+                    <!-- 預覽圖 -->
+                    <div class="relative group">
+                        <div class="bg-zinc-900 rounded-lg border border-zinc-800 p-2 flex items-center justify-center overflow-hidden" style="min-height: 220px;">
+                            <img id="previewImg" src="" class="object-contain shadow-md rounded max-h-[280px] w-full h-full">
+                        </div>
+                        
+                        <!-- 縮放 Bar -->
+                        <div class="absolute bottom-2 left-2 right-2 bg-black/80 backdrop-blur rounded px-2 py-1 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <span class="text-[10px] text-zinc-400 w-8" id="zoomValueText">300</span>
+                            <input type="range" id="zoomSlider" min="100" max="800" value="300" step="10" class="flex-1 h-1">
+                        </div>
+                    </div>
+
+                    <!-- 屬性列表 -->
+                    <div class="space-y-3">
+                        <div class="space-y-1">
+                            <label class="text-[10px] text-zinc-500 font-bold uppercase">原始檔名</label>
+                            <div id="previewName" class="text-xs text-zinc-300 font-mono break-all bg-zinc-800/50 p-2 rounded border border-zinc-800 select-text">--</div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="space-y-1">
+                                <label class="text-[10px] text-zinc-500 font-bold uppercase">檔案大小</label>
+                                <div id="previewSize" class="text-xs text-zinc-400 font-mono">--</div>
+                            </div>
+                            <div class="space-y-1">
+                                <label class="text-[10px] text-zinc-500 font-bold uppercase">類型</label>
+                                <div id="previewType" class="text-xs text-zinc-400 font-mono">--</div>
+                            </div>
+                        </div>
+
+                        <div class="pt-3 border-t border-zinc-800 space-y-1">
+                            <label class="text-[10px] text-accent font-bold uppercase">新檔名預覽</label>
+                            <div class="text-sm text-white font-mono break-all select-text font-medium" id="previewNewName">--</div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 操作日誌面板 (新功能) -->
+    <div id="historyPanel" class="flex flex-col">
+        <div class="px-3 py-2 border-b border-zinc-700 bg-zinc-800 text-xs font-bold text-zinc-400 flex items-center justify-between shrink-0">
+            <span>操作日誌 (History)</span>
+            <button onclick="toggleHistoryPanel()" class="hover:text-white">✕</button>
+        </div>
+        <div class="overflow-y-auto custom-scrollbar flex-1" id="historyList">
+            <!-- 內容由 JS 生成 -->
+            <div class="p-4 text-center text-zinc-500 text-xs">暫無紀錄</div>
+        </div>
+    </div>
+
+    <!-- 底部控制區 -->
+    <div class="bg-bg-panel border-t border-zinc-800 p-3 z-40 shrink-0">
+        <div class="max-w-7xl mx-auto flex flex-col xl:flex-row items-center justify-between gap-4">
+            
+            <!-- 1. 檔案操作 -->
+            <div class="flex items-center gap-2 w-full xl:w-auto relative">
+                <button onclick="document.getElementById('fileInput').click()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2.5 px-5 rounded-lg transition border border-indigo-500 flex items-center shadow-lg shadow-indigo-900/30 active:scale-95 group shrink-0">
+                    <svg class="w-5 h-5 mr-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m5 5H3a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    選取檔案
+                </button>
+                <input type="file" id="fileInput" multiple accept="image/*" class="hidden" style="display:none">
+                
+                <button onclick="clearAll()" class="bg-zinc-800 hover:bg-red-900/20 text-zinc-400 hover:text-red-400 border border-zinc-700 py-2.5 px-3 rounded-lg transition ml-1 active:scale-95 shrink-0" title="全部清空">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                </button>
+                
+                <div class="w-px h-6 bg-zinc-700 mx-1"></div>
+
+                <!-- 復原 (Undo) -->
+                <button onclick="undo()" id="undoBtn" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white border border-zinc-700 py-2.5 px-3 rounded-lg transition active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed shrink-0" title="復原 (Ctrl+Z)" disabled>
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path></svg>
+                </button>
+
+                 <!-- 重做 (Redo) -->
+                 <button onclick="redo()" id="redoBtn" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white border border-zinc-700 py-2.5 px-3 rounded-lg transition active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed shrink-0" title="重做 (Ctrl+Y)" disabled>
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 10h-10a8 8 0 00-8 8v2M21 10l-6 6m6-6l-6-6"></path></svg>
+                </button>
+
+                <div class="w-px h-6 bg-zinc-700 mx-1"></div>
+
+                <!-- 日誌開關 (History Toggle) -->
+                <button onclick="toggleHistoryPanel()" id="historyBtn" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white border border-zinc-700 py-2.5 px-3 rounded-lg transition active:scale-95 shrink-0" title="操作日誌">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                </button>
+            </div>
+
+            <!-- 2. 命名與輸出設定 -->
+            <div class="flex flex-col md:flex-row items-center gap-3 bg-zinc-900/50 border border-zinc-800 px-4 py-1.5 rounded-lg input-focus-ring w-full xl:w-auto justify-center">
+                
+                <!-- 命名規則 -->
+                <div class="flex items-center gap-1 text-zinc-300">
+                    <input type="text" id="prefixInput" class="bg-transparent border-b border-zinc-700 text-center w-20 py-1 focus:outline-none focus:border-blue-500 transition-colors text-sm placeholder-zinc-600" placeholder="前綴 (Prefix)">
+                    
+                    <!-- 起始序號 -->
+                    <div class="relative flex items-center" title="起始號碼">
+                        <span class="text-zinc-600 text-xs absolute left-1">#</span>
+                        <input type="number" id="startNumInput" value="1" min="0" class="bg-transparent border-b border-zinc-700 text-center w-12 py-1 pl-3 focus:outline-none focus:border-blue-500 transition-colors text-sm text-accent font-bold" title="起始號碼">
+                    </div>
+                    
+                    <input type="text" id="suffixInput" class="bg-transparent border-b border-zinc-700 text-center w-20 py-1 focus:outline-none focus:border-blue-500 transition-colors text-sm placeholder-zinc-600" placeholder="後綴 (Suffix)">
+                </div>
+
+                <div class="w-px h-6 bg-zinc-800 hidden md:block"></div>
+
+                <!-- 格式選擇 -->
+                <div class="flex items-center gap-2">
+                    <label class="text-[10px] text-zinc-500 font-bold uppercase">格式</label>
+                    <select id="formatSelect" class="bg-zinc-800 text-zinc-300 text-xs border border-zinc-700 rounded py-1 pl-2 pr-8 focus:outline-none focus:border-blue-500 custom-select">
+                        <option value="original">原始 (Original)</option>
+                        <option value="image/jpeg">JPG</option>
+                        <option value="image/png">PNG</option>
+                        <option value="image/webp">WebP (推薦)</option>
+                    </select>
+                </div>
+
+                <div class="w-px h-6 bg-zinc-800 hidden md:block"></div>
+
+                <!-- 開關 -->
+                <div class="flex items-center gap-4">
+                    <label class="flex items-center gap-2 cursor-pointer" title="自動補零 (01, 02...)">
+                        <input type="checkbox" id="padZeroCheckbox" class="sr-only" checked>
+                        <span class="text-[10px] uppercase font-bold text-zinc-500">補零</span>
+                        <div class="toggle-switch scale-75 origin-left">
+                            <div class="toggle-dot"></div>
+                        </div>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer" title="移除 Exif 並重新編碼">
+                        <input type="checkbox" id="cleanMetaCheckbox" class="sr-only">
+                        <span class="text-[10px] uppercase font-bold text-zinc-500">清洗</span>
+                        <div class="toggle-switch scale-75 origin-left">
+                            <div class="toggle-dot"></div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- 3. 匯出操作 -->
+            <div class="w-full xl:w-auto">
+                <button id="exportBtn" onclick="smartExport()" class="w-full xl:w-auto bg-zinc-100 hover:bg-white text-zinc-900 text-xs font-bold py-2.5 px-6 rounded-md transition shadow-md hover:shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    開始處理
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- 自定義 Modal -->
+    <div id="modalOverlay" class="fixed inset-0 bg-black/60 backdrop-blur-[2px] hidden flex items-center justify-center z-50">
+        <div class="bg-zinc-900 rounded-lg p-6 max-w-sm w-full border border-zinc-700 shadow-2xl transform scale-95 transition-all" id="modalBox">
+            <h3 class="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                <span id="modalIcon">💡</span>
+                <span id="modalTitle">提示</span>
+            </h3>
+            <p class="text-zinc-400 text-sm mb-6 leading-relaxed" id="modalMsg">訊息內容</p>
+            
+            <div id="progressBarContainer" class="hidden w-full bg-zinc-800 rounded-full h-2 mb-4 overflow-hidden">
+                <div id="progressBar" class="bg-blue-600 h-full rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+
+            <div class="flex justify-end gap-2">
+                <button id="modalCancelBtn" onclick="closeModal()" class="hidden text-zinc-400 hover:text-white px-3 py-1.5 text-xs rounded hover:bg-zinc-800 transition">取消</button>
+                <button id="modalConfirmBtn" onclick="closeModal()" class="bg-zinc-100 text-zinc-900 px-4 py-2 text-xs font-bold rounded hover:bg-white transition">確定</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // === 狀態管理 ===
+        let images = []; 
+        let historyStack = []; // 歷史紀錄
+        let redoStack = [];    // 重做紀錄
+        let sortableInstance = null;
+        let selectedImageId = null; 
+
+        // DOM 元素引用
+        const gridContainer = document.getElementById('gridContainer');
+        const emptyMsg = document.getElementById('emptyMsg');
+        const prefixInput = document.getElementById('prefixInput');
+        const suffixInput = document.getElementById('suffixInput');
+        const startNumInput = document.getElementById('startNumInput');
+        const formatSelect = document.getElementById('formatSelect');
+        const padZeroCheckbox = document.getElementById('padZeroCheckbox');
+        const cleanMetaCheckbox = document.getElementById('cleanMetaCheckbox'); 
+        const hoverPreviewCheckbox = document.getElementById('hoverPreviewCheckbox');
+        const leftPanel = document.getElementById('leftPanel'); 
+        
+        const previewPane = document.getElementById('previewPane');
+        const resizerBar = document.getElementById('resizer-bar');
+        const noSelectionMsg = document.getElementById('noSelectionMsg');
+        const selectionInfo = document.getElementById('selectionInfo');
+        const previewImg = document.getElementById('previewImg');
+        const previewName = document.getElementById('previewName');
+        const previewSize = document.getElementById('previewSize');
+        const previewType = document.getElementById('previewType');
+        const previewNewName = document.getElementById('previewNewName');
+        
+        const zoomSlider = document.getElementById('zoomSlider');
+        const zoomValueText = document.getElementById('zoomValueText');
+        const gridSizeSlider = document.getElementById('gridSizeSlider');
+        
+        const undoBtn = document.getElementById('undoBtn');
+        const redoBtn = document.getElementById('redoBtn');
+        const historyPanel = document.getElementById('historyPanel');
+        const historyList = document.getElementById('historyList');
+        const historyBtn = document.getElementById('historyBtn');
+
+        // === 歷史紀錄功能 (核心修改) ===
+        function getCurrentState() {
+            return {
+                images: [...images], // 淺拷貝陣列
+                settings: {
+                    prefix: prefixInput.value,
+                    suffix: suffixInput.value,
+                    startNum: startNumInput.value,
+                    format: formatSelect.value,
+                    padZero: padZeroCheckbox.checked,
+                    cleanMeta: cleanMetaCheckbox.checked
+                }
+            };
+        }
+
+        // 修改：加入 actionName 與 details 參數
+        function saveStateToHistory(actionName = '操作', details = '') {
+            if (historyStack.length >= 30) {
+                historyStack.shift();
+            }
+            
+            // 記錄當前時間
+            const now = new Date();
+            const timeStr = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
+
+            historyStack.push({
+                state: getCurrentState(),
+                action: actionName,
+                details: details,
+                time: timeStr
+            });
+            
+            // 每次有新動作時，清空 Redo 堆疊
+            redoStack = [];
+            
+            updateHistoryButtons();
+            if (historyPanel.style.display === 'flex') {
+                renderHistoryLog();
+            }
+        }
+
+        function applyState(state) {
+            // 還原圖片
+            images = state.images;
+            
+            // 還原設定
+            prefixInput.value = state.settings.prefix;
+            suffixInput.value = state.settings.suffix;
+            startNumInput.value = state.settings.startNum;
+            formatSelect.value = state.settings.format;
+            padZeroCheckbox.checked = state.settings.padZero;
+            cleanMetaCheckbox.checked = state.settings.cleanMeta;
+
+            renderGrid();
+            updateAllPreviews();
+        }
+
+        function undo() {
+            if (historyStack.length === 0) return;
+            
+            // 1. 將當前狀態存入 Redo 堆疊
+            redoStack.push({
+                state: getCurrentState(),
+                action: '重做',
+                details: '還原此步驟'
+            });
+
+            // 2. 取出歷史狀態並應用
+            const record = historyStack.pop();
+            applyState(record.state);
+            
+            // 3. 處理選取狀態
+            refreshSelectionState();
+
+            updateHistoryButtons();
+            if (historyPanel.style.display === 'flex') renderHistoryLog();
+        }
+
+        function redo() {
+            if (redoStack.length === 0) return;
+
+            // 1. 將當前狀態存回 History 堆疊
+            const now = new Date();
+            const timeStr = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+            
+            historyStack.push({
+                state: getCurrentState(),
+                action: '重做操作',
+                details: '取消復原',
+                time: timeStr
+            });
+
+            // 2. 取出 Redo 狀態並應用
+            const record = redoStack.pop();
+            applyState(record.state);
+
+            refreshSelectionState();
+
+            updateHistoryButtons();
+            if (historyPanel.style.display === 'flex') renderHistoryLog();
+        }
+
+        function refreshSelectionState() {
+            if (selectedImageId && !images.find(img => img.id === selectedImageId)) {
+                selectedImageId = null;
+                noSelectionMsg.style.display = 'flex';
+                selectionInfo.style.display = 'none';
+            } else if (selectedImageId) {
+                updatePreviewPane(selectedImageId);
+            }
+        }
+
+        // === 日誌面板邏輯 ===
+        function toggleHistoryPanel() {
+            if (historyPanel.style.display === 'flex') {
+                historyPanel.style.display = 'none';
+                historyBtn.classList.remove('text-white', 'bg-zinc-700');
+            } else {
+                historyPanel.style.display = 'flex';
+                historyBtn.classList.add('text-white', 'bg-zinc-700');
+                renderHistoryLog();
+            }
+        }
+
+        function renderHistoryLog() {
+            historyList.innerHTML = '';
+            
+            if (historyStack.length === 0) {
+                historyList.innerHTML = '<div class="p-4 text-center text-zinc-500 text-xs">暫無紀錄</div>';
+                return;
+            }
+
+            // 倒序顯示，最新的在上面
+            [...historyStack].reverse().forEach((record, revIndex) => {
+                // 真實 index
+                const realIndex = historyStack.length - 1 - revIndex;
+                
+                const div = document.createElement('div');
+                div.className = 'history-item';
+                div.innerHTML = `
+                    <div class="flex-1 overflow-hidden">
+                        <div class="flex items-center gap-2 mb-0.5">
+                            <span class="history-label">還原</span>
+                            <span class="history-action">${record.action}</span>
+                        </div>
+                        <div class="history-detail" title="${record.details}">${record.details}</div>
+                        <div class="history-time">${record.time}</div>
+                    </div>
+                    <svg class="w-4 h-4 text-zinc-600 group-hover:text-white flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path></svg>
+                `;
+                
+                div.onclick = () => restoreHistory(realIndex);
+                historyList.appendChild(div);
+            });
+        }
+
+        function restoreHistory(index) {
+            const undoCount = historyStack.length - index;
+            if (undoCount <= 0) return;
+
+            redoStack.push({ state: getCurrentState(), action: '跳轉日誌前', details: '批次還原' });
+
+            for (let i = historyStack.length - 1; i > index; i--) {
+                redoStack.push(historyStack[i]);
+            }
+
+            const targetRecord = historyStack[index];
+            historyStack.length = index; 
+
+            applyState(targetRecord.state);
+            refreshSelectionState();
+            updateHistoryButtons();
+            
+            renderHistoryLog();
+        }
+
+        function updateHistoryButtons() {
+            // Undo 按鈕狀態
+            undoBtn.disabled = historyStack.length === 0;
+            if (historyStack.length === 0) {
+                undoBtn.classList.add('opacity-30', 'cursor-not-allowed');
+                undoBtn.classList.remove('hover:text-white', 'hover:bg-zinc-700');
+            } else {
+                undoBtn.classList.remove('opacity-30', 'cursor-not-allowed');
+                undoBtn.classList.add('hover:text-white', 'hover:bg-zinc-700');
+            }
+
+            // Redo 按鈕狀態
+            redoBtn.disabled = redoStack.length === 0;
+            if (redoStack.length === 0) {
+                redoBtn.classList.add('opacity-30', 'cursor-not-allowed');
+                redoBtn.classList.remove('hover:text-white', 'hover:bg-zinc-700');
+            } else {
+                redoBtn.classList.remove('opacity-30', 'cursor-not-allowed');
+                redoBtn.classList.add('hover:text-white', 'hover:bg-zinc-700');
+            }
+        }
+
+        // === 排序功能 ===
+        function sortImages(type) {
+            if (images.length === 0) return;
+            // 記錄詳細資訊
+            let actionName = '排序';
+            let detail = '';
+            
+            if(type === 'name') {
+                actionName = '依檔名排序';
+                detail = 'A → Z';
+            }
+            if(type === 'date') {
+                actionName = '依日期排序';
+                detail = '舊 → 新';
+            }
+            if(type === 'reverse') {
+                actionName = '反向排序';
+                detail = '反轉順序';
+            }
+            
+            saveStateToHistory(actionName, detail); 
+
+            if (type === 'reverse') {
+                images.reverse();
+            } else if (type === 'name') {
+                images.sort((a, b) => a.file.name.localeCompare(b.file.name));
+            } else if (type === 'date') {
+                images.sort((a, b) => a.file.lastModified - b.file.lastModified);
+            }
+
+            renderGrid();
+            showModal("排序完成", `已完成 ${actionName}`);
+            setTimeout(closeModal, 800);
+        }
+
+        // === 網格渲染 ===
+        function renderGrid() {
+            gridContainer.innerHTML = '';
+            gridContainer.appendChild(emptyMsg); 
+            
+            if (images.length === 0) {
+                emptyMsg.style.display = 'flex';
+            } else {
+                emptyMsg.style.display = 'none';
+                
+                const startNum = parseInt(startNumInput.value) || 1;
+
+                images.forEach((imgObj, index) => {
+                    createCardDOM(imgObj, index, startNum);
+                    
+                    if (imgObj.loaded && imgObj.previewUrl) {
+                        const card = document.getElementById(imgObj.id);
+                        const spinner = document.getElementById(`spinner_${imgObj.id}`);
+                        if(spinner) spinner.remove();
+                        
+                        if (!card.querySelector('.thumb-img')) {
+                            const img = document.createElement('img');
+                            img.src = imgObj.previewUrl;
+                            img.className = 'thumb-img object-cover w-full h-full';
+                            card.appendChild(img);
+                            card.classList.add('filled');
+                        }
+                        
+                        if (imgObj.id === selectedImageId) {
+                            card.classList.add('selected');
+                        }
+                    }
+                });
+            }
+        }
+
+        function initSortable() {
+            sortableInstance = new Sortable(gridContainer, {
+                draggable: '.img-slot',
+                animation: 150, 
+                ghostClass: 'sortable-ghost',
+                delay: 0,
+                onEnd: function (evt) {
+                    const oldIndex = evt.oldIndex; 
+                    const newIndex = evt.newIndex;
+                    if (oldIndex !== newIndex) {
+                        if (images[oldIndex] === undefined) return;
+                        
+                        // 動作前保存狀態
+                        saveStateToHistory('移動圖片', '手動調整順序'); 
+                        
+                        const movedItem = images.splice(oldIndex, 1)[0];
+                        images.splice(newIndex, 0, movedItem);
+                        updateIndexes();
+                        if(selectedImageId) updatePreviewPane(selectedImageId);
+                    }
+                }
+            });
+        }
+
+        // === 鍵盤與 UI 互動 ===
+        document.addEventListener('keydown', (e) => {
+            if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+
+            // 復原: Ctrl+Z
+            if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+                e.preventDefault();
+                undo();
+                return;
+            }
+
+            // 重做: Ctrl+Y 或 Ctrl+Shift+Z
+            if (((e.ctrlKey || e.metaKey) && e.key === 'y') || ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'z')) {
+                e.preventDefault();
+                redo();
+                return;
+            }
+
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                if (selectedImageId) {
+                    removeImage(selectedImageId);
+                }
+            } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                navigateSelection(1);
+            } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                navigateSelection(-1);
+            }
+        });
+
+        function navigateSelection(direction) {
+            if (images.length === 0) return;
+            let idx = images.findIndex(img => img.id === selectedImageId);
+            
+            if (idx === -1) {
+                if (direction > 0) selectImage(images[0].id);
+                else selectImage(images[images.length - 1].id);
+            } else {
+                let newIdx = idx + direction;
+                if (newIdx >= 0 && newIdx < images.length) {
+                    selectImage(images[newIdx].id);
+                    document.getElementById(images[newIdx].id).scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+            }
+        }
+
+        gridSizeSlider.addEventListener('input', (e) => {
+            document.documentElement.style.setProperty('--slot-size', `${e.target.value}px`);
+        });
+
+        let isResizing = false;
+        resizerBar.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            document.body.style.cursor = 'col-resize';
+            resizerBar.classList.add('active');
+            e.preventDefault(); 
+        });
+        document.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
+            const newWidth = window.innerWidth - e.clientX;
+            if (newWidth > 250 && newWidth < 800) previewPane.style.width = `${newWidth}px`;
+        });
+        document.addEventListener('mouseup', () => {
+            if (isResizing) {
+                isResizing = false;
+                document.body.style.cursor = ''; 
+                resizerBar.classList.remove('active');
+            }
+        });
+
+        zoomSlider.addEventListener('input', (e) => {
+            const val = e.target.value;
+            previewImg.style.maxHeight = `${val}px`;
+            zoomValueText.innerText = val;
+        });
+
+        function togglePreviewPane() {
+            const btn = document.getElementById('togglePreviewBtn');
+            previewPane.classList.toggle('!hidden');
+            resizerBar.classList.toggle('!hidden');
+            const isHidden = previewPane.classList.contains('!hidden');
+            btn.classList.toggle('text-white', isHidden); 
+            btn.classList.toggle('text-zinc-400', !isHidden);
+        }
+
+        // === 檔案處理 ===
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            handleFiles(e.target.files);
+            this.value = '';
+        });
+
+        const dropZone = document.getElementById('leftPanel'); 
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => { e.preventDefault(); e.stopPropagation(); }, false);
+        });
+
+        dropZone.addEventListener('dragenter', () => dropZone.classList.add('bg-zinc-900'));
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('bg-zinc-900'));
+        dropZone.addEventListener('drop', (e) => {
+            dropZone.classList.remove('bg-zinc-900');
+            handleFiles(e.dataTransfer.files);
+        });
+
+        async function handleFiles(fileList) {
+            if (!fileList.length) return;
+            const validFiles = Array.isArray(fileList) ? fileList : Array.from(fileList).filter(file => file.type.startsWith('image/'));
+            
+            if (validFiles.length === 0) {
+                showModal("錯誤", "未偵測到圖片檔案");
+                return;
+            }
+
+            saveStateToHistory('匯入圖片', `新增 ${validFiles.length} 張項目`); 
+
+            emptyMsg.style.display = 'none';
+            const startNum = parseInt(startNumInput.value) || 1;
+
+            for (const file of validFiles) {
+                const id = 'img_' + Math.random().toString(36).substr(2, 9);
+                const imgObj = {
+                    id: id,
+                    file: file,
+                    previewUrl: null,
+                    loaded: false
+                };
+                
+                images.push(imgObj);
+                createCardDOM(imgObj, images.length - 1, startNum);
+                
+                readFileAsync(file).then(url => {
+                    imgObj.previewUrl = url;
+                    imgObj.loaded = true;
+                    updateCardImage(id, url);
+                });
+            }
+            updateIndexes();
+        }
+
+        function readFileAsync(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function processImage(file, targetFormat, needClean) {
+            if (targetFormat === 'original' && !needClean) {
+                return file;
+            }
+
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                const url = URL.createObjectURL(file);
+                
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    
+                    let mimeType = file.type;
+                    if (targetFormat !== 'original') {
+                        mimeType = targetFormat;
+                    }
+
+                    let quality = 0.92;
+                    if (mimeType === 'image/jpeg' || mimeType === 'image/webp') {
+                        quality = 0.92; 
+                    }
+
+                    canvas.toBlob(blob => {
+                        URL.revokeObjectURL(url);
+                        if (blob) resolve(blob);
+                        else reject(new Error("Canvas conversion failed"));
+                    }, mimeType, quality);
+                };
+                
+                img.onerror = (e) => {
+                    URL.revokeObjectURL(url);
+                    reject(new Error("Image loading failed"));
+                };
+                
+                img.src = url;
+            });
+        }
+
+        // === DOM ===
+        function createCardDOM(imgObj, index, startNum) {
+            const div = document.createElement('div');
+            div.className = 'img-slot';
+            div.id = imgObj.id;
+            div.onclick = () => selectImage(imgObj.id);
+
+            div.onmouseenter = () => {
+                if (hoverPreviewCheckbox.checked) {
+                    updatePreviewPane(imgObj.id);
+                }
+            };
+
+            div.onmouseleave = () => {
+                if (hoverPreviewCheckbox.checked) {
+                    if (selectedImageId) {
+                        updatePreviewPane(selectedImageId);
+                    } else {
+                        noSelectionMsg.style.display = 'flex';
+                        selectionInfo.style.display = 'none';
+                    }
+                }
+            };
+
+            const badge = document.createElement('div');
+            badge.className = 'index-badge';
+            badge.innerText = index + startNum;
+            div.appendChild(badge);
+
+            const removeBtn = document.createElement('div');
+            removeBtn.className = 'remove-btn';
+            removeBtn.innerHTML = '×';
+            removeBtn.title = '移除';
+            removeBtn.onclick = (e) => {
+                e.stopPropagation();
+                removeImage(imgObj.id);
+            };
+            div.appendChild(removeBtn);
+
+            const spinner = document.createElement('div');
+            spinner.className = 'w-6 h-6 border-2 border-zinc-600 border-t-blue-500 rounded-full animate-spin';
+            spinner.id = `spinner_${imgObj.id}`;
+            div.appendChild(spinner);
+            
+            gridContainer.appendChild(div);
+        }
+
+        function updateCardImage(id, url) {
+            const card = document.getElementById(id);
+            if (!card) return;
+            const spinner = document.getElementById(`spinner_${id}`);
+            if (spinner) spinner.remove();
+            
+            const img = document.createElement('img');
+            img.src = url;
+            img.className = 'thumb-img object-cover w-full h-full'; 
+            card.appendChild(img);
+            card.classList.add('filled');
+        }
+
+        function selectImage(id) {
+            const prevSelected = document.querySelector('.img-slot.selected');
+            if (prevSelected) prevSelected.classList.remove('selected');
+            
+            const currentCard = document.getElementById(id);
+            if (currentCard) currentCard.classList.add('selected');
+            
+            selectedImageId = id;
+            updatePreviewPane(id);
+        }
+
+        function getNewExtension(originalName, targetFormat) {
+            if (targetFormat === 'original') {
+                return originalName.substring(originalName.lastIndexOf('.'));
+            }
+            if (targetFormat === 'image/jpeg') return '.jpg';
+            if (targetFormat === 'image/png') return '.png';
+            if (targetFormat === 'image/webp') return '.webp';
+            return '.jpg';
+        }
+
+        function updatePreviewPane(id) {
+            const imgObj = images.find(img => img.id === id);
+            if (!imgObj) {
+                noSelectionMsg.style.display = 'flex';
+                selectionInfo.style.display = 'none';
+                return;
+            }
+
+            noSelectionMsg.style.display = 'none';
+            selectionInfo.style.display = 'flex';
+
+            if (imgObj.loaded) previewImg.src = imgObj.previewUrl;
+            else previewImg.src = ''; 
+
+            previewName.innerText = imgObj.file.name;
+            previewSize.innerText = formatBytes(imgObj.file.size);
+            previewType.innerText = imgObj.file.type || 'Unknown';
+
+            const index = images.indexOf(imgObj);
+            const pre = prefixInput.value.trim(); 
+            const suf = suffixInput.value.trim();
+            const pad = padZeroCheckbox.checked;
+            const startNum = parseInt(startNumInput.value) || 1;
+            const format = formatSelect.value;
+            
+            let numStr = (index + startNum).toString();
+            if (pad) numStr = numStr.padStart(2, '0');
+            
+            const originalName = imgObj.file.name;
+            const ext = getNewExtension(originalName, format);
+            
+            previewNewName.innerText = `${pre}${numStr}${suf}${ext}`;
+        }
+
+        function formatBytes(bytes) {
+            if (!+bytes) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+        }
+
+        function updateAllPreviews() {
+            if (selectedImageId) updatePreviewPane(selectedImageId);
+            updateIndexes(); 
+        }
+
+        prefixInput.addEventListener('input', updateAllPreviews);
+        suffixInput.addEventListener('input', updateAllPreviews);
+        startNumInput.addEventListener('input', updateAllPreviews);
+        formatSelect.addEventListener('change', updateAllPreviews);
+        padZeroCheckbox.addEventListener('change', updateAllPreviews);
+
+        function removeImage(id) {
+            const imgObj = images.find(img => img.id === id);
+            const name = imgObj ? imgObj.file.name : '項目';
+            
+            saveStateToHistory('移除圖片', `刪除 ${name}`); 
+
+            const idx = images.findIndex(img => img.id === id);
+            if (idx > -1) images.splice(idx, 1);
+            
+            const el = document.getElementById(id);
+            if(el) el.remove();
+            
+            if (id === selectedImageId) {
+                selectedImageId = null;
+                noSelectionMsg.style.display = 'flex';
+                selectionInfo.style.display = 'none';
+            }
+
+            if (images.length === 0) emptyMsg.style.display = 'flex';
+            updateIndexes();
+        }
+
+        function clearAll() {
+            if (images.length === 0) return;
+            if(!confirm("確定清空？")) return;
+            
+            saveStateToHistory('清空工作區', `移除 ${images.length} 張圖片`); 
+
+            images = [];
+            gridContainer.innerHTML = '';
+            gridContainer.appendChild(emptyMsg);
+            emptyMsg.style.display = 'flex';
+            selectedImageId = null;
+            noSelectionMsg.style.display = 'flex';
+            selectionInfo.style.display = 'none';
+        }
+
+        function updateIndexes() {
+            const cards = gridContainer.children;
+            let currentIdx = 0;
+            const startNum = parseInt(startNumInput.value) || 1;
+            const newOrderImages = [];
+            
+            Array.from(cards).forEach(card => {
+                if (card.id === 'emptyMsg') return;
+                const badge = card.querySelector('.index-badge');
+                if (badge) badge.innerText = currentIdx + startNum;
+                const imgObj = images.find(img => img.id === card.id);
+                if (imgObj) newOrderImages.push(imgObj);
+                currentIdx++;
+            });
+            
+            if (newOrderImages.length === images.length) images = newOrderImages;
+        }
+
+        // === 匯出邏輯 ===
+        async function smartExport() {
+            if (images.length === 0) {
+                showModal("提示", "沒有圖片");
+                return;
+            }
+
+            const btn = document.getElementById('exportBtn');
+            const originalBtnText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = `<svg class="animate-spin -ml-1 mr-3 h-4 w-4 text-zinc-900" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>處理中`;
+
+            const prefix = prefixInput.value.trim();
+            const suffix = suffixInput.value.trim();
+            const padZero = padZeroCheckbox.checked;
+            const needClean = cleanMetaCheckbox.checked; 
+            const startNum = parseInt(startNumInput.value) || 1;
+            const targetFormat = formatSelect.value;
+
+            try {
+                // 優先使用 File System Access API
+                if ('showDirectoryPicker' in window) {
+                    try {
+                        const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite', startIn: 'pictures' });
+                        showModal("處理中", "轉換格式並寫入檔案...", true);
+                        const progressBar = document.getElementById('progressBar');
+                        const newDirHandle = await dirHandle.getDirectoryHandle('Renamed_Images', { create: true });
+
+                        for (let i = 0; i < images.length; i++) {
+                            const imgObj = images[i];
+                            const originalName = imgObj.file.name;
+                            const ext = getNewExtension(originalName, targetFormat);
+
+                            let numStr = (i + startNum).toString();
+                            if (padZero) numStr = numStr.padStart(2, '0');
+                            const newName = `${prefix}${numStr}${suffix}${ext}`;
+                            
+                            const fileHandle = await newDirHandle.getFileHandle(newName, { create: true });
+                            const writable = await fileHandle.createWritable();
+                            
+                            const finalBlob = await processImage(imgObj.file, targetFormat, needClean);
+                            
+                            await writable.write(finalBlob);
+                            await writable.close();
+
+                            const percent = Math.round(((i + 1) / images.length) * 100);
+                            progressBar.style.width = `${percent}%`;
+                        }
+                        closeModal();
+                        showModal("完成", "已成功寫入至 Renamed_Images");
+                        return; // 成功結束
+                    } catch (fsErr) {
+                        if (fsErr.name === 'AbortError') return; 
+                        console.warn("FS API 失敗，切換 Fallback", fsErr);
+                    }
+                } 
+                
+                // Fallback: 下載 ZIP
+                await downloadAsZip(prefix, suffix, padZero, needClean, startNum, targetFormat);
+
+            } catch (err) {
+                console.error(err);
+                showModal("錯誤", err.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalBtnText;
+            }
+        }
+
+        async function downloadAsZip(prefix, suffix, padZero, needClean, startNum, targetFormat) {
+            showModal("處理中", "打包 ZIP (含轉檔)...", true);
+            const progressBar = document.getElementById('progressBar');
+            try {
+                const zip = new JSZip();
+                const folder = zip.folder("Renamed_Images");
+                for (let i = 0; i < images.length; i++) {
+                    const imgObj = images[i];
+                    const originalName = imgObj.file.name;
+                    const ext = getNewExtension(originalName, targetFormat);
+
+                    let numStr = (i + startNum).toString();
+                    if (padZero) numStr = numStr.padStart(2, '0');
+                    const newName = `${prefix}${numStr}${suffix}${ext}`;
+                    
+                    const finalBlob = await processImage(imgObj.file, targetFormat, needClean);
+                    folder.file(newName, finalBlob);
+                    
+                    const percent = Math.round(((i + 1) / images.length) * 100);
+                    progressBar.style.width = `${percent}%`;
+                }
+                const content = await zip.generateAsync({type: "blob"});
+                saveAs(content, "renamed_images.zip");
+                closeModal();
+                showModal("完成", "已下載 ZIP 檔");
+            } catch (zipErr) {
+                showModal("錯誤", "ZIP 打包失敗: " + zipErr.message);
+            }
+        }
+
+        // === Modal ===
+        const modalOverlay = document.getElementById('modalOverlay');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalMsg = document.getElementById('modalMsg');
+        const progressContainer = document.getElementById('progressBarContainer');
+        const modalConfirmBtn = document.getElementById('modalConfirmBtn');
+        const modalCancelBtn = document.getElementById('modalCancelBtn');
+
+        function showModal(title, msg, showProgress = false) {
+            modalTitle.innerText = title;
+            modalMsg.innerText = msg;
+            modalCancelBtn.classList.add('hidden'); 
+            modalConfirmBtn.onclick = closeModal; 
+            
+            if (showProgress) {
+                progressContainer.classList.remove('hidden');
+                document.getElementById('progressBar').style.width = '0%';
+                modalConfirmBtn.classList.add('hidden'); 
+            } else {
+                progressContainer.classList.add('hidden');
+                modalConfirmBtn.classList.remove('hidden');
+            }
+            modalOverlay.classList.remove('hidden');
+            setTimeout(() => {
+                document.getElementById('modalBox').classList.remove('scale-95');
+                document.getElementById('modalBox').classList.add('scale-100');
+            }, 10);
+        }
+
+        function closeModal() {
+            document.getElementById('modalBox').classList.remove('scale-100');
+            document.getElementById('modalBox').classList.add('scale-95');
+            setTimeout(() => {
+                modalOverlay.classList.add('hidden');
+            }, 150);
+        }
+
+        initSortable();
+        updateHistoryButtons();
+    </script>
+</body>
+</html>

@@ -1,0 +1,1477 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>漫畫嵌字神器 Pro (Comic Typesetter)</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Fabric.js (Canvas Library) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- JSZip & FileSaver -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&family=Noto+Serif+TC:wght@400;700&family=ZCOOL+KuaiLe&family=DotGothic16&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #f3f4f6;
+            overflow: hidden;
+            touch-action: none; /* Prevent browser zooming on mobile */
+        }
+        
+        .canvas-container-bg {
+            background-image:
+                linear-gradient(45deg, #e5e7eb 25%, transparent 25%), 
+                linear-gradient(-45deg, #e5e7eb 25%, transparent 25%), 
+                linear-gradient(45deg, transparent 75%, #e5e7eb 75%), 
+                linear-gradient(-45deg, transparent 75%, #e5e7eb 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px; 
+            transition: background-color 0.3s;
+        }
+
+        /* Drag over state */
+        .drag-active {
+            background-color: #eff6ff !important; /* light blue */
+            box-shadow: inset 0 0 0 4px #60a5fa;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        .tool-btn { transition: all 0.2s; }
+        .tool-btn:active { transform: scale(0.95); }
+        
+        .thumbnail.active {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px #3b82f6;
+        }
+
+        .preset-item:hover .delete-preset { opacity: 1; }
+        
+        /* Range Input Styling */
+        input[type=range] {
+            -webkit-appearance: none; 
+            background: transparent; 
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px; width: 16px;
+            border-radius: 50%; background: #3b82f6;
+            margin-top: -6px; cursor: pointer;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px;
+            background: #e2e8f0; border-radius: 2px;
+        }
+        
+        /* Vertical Range Input for Zoom */
+        .zoom-slider-container {
+            height: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        input[type=range].vertical-slider {
+            transform: rotate(-90deg);
+            width: 80px;
+        }
+
+        /* Loader */
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 3px solid #3b82f6;
+            width: 20px;
+            height: 20px;
+            -webkit-animation: spin 1s linear infinite; /* Safari */
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col md:flex-row">
+
+    <!-- Mobile Header (Toggle Sidebar) -->
+    <div class="md:hidden h-14 bg-white border-b flex items-center justify-between px-4 z-20">
+        <h1 class="font-bold text-gray-800 flex items-center gap-2">
+            <i data-lucide="pen-tool" class="w-5 h-5 text-blue-500"></i> 嵌字神器
+        </h1>
+        <button onclick="toggleSidebar()" class="p-2 bg-gray-100 rounded">
+            <i data-lucide="menu" class="w-5 h-5"></i>
+        </button>
+    </div>
+
+    <!-- Left Sidebar: Tools -->
+    <aside id="sidebar" class="fixed inset-y-0 left-0 transform -translate-x-full md:relative md:translate-x-0 w-80 bg-white border-r border-gray-200 flex flex-col h-full shadow-2xl md:shadow-none z-30 transition-transform duration-300">
+        <!-- Sidebar Header -->
+        <div class="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 md:bg-white">
+            <div>
+                <h1 class="text-xl font-bold text-gray-800 hidden md:flex items-center gap-2">
+                    <i data-lucide="pen-tool" class="w-6 h-6 text-blue-500"></i>
+                    嵌字神器 Pro
+                </h1>
+                <p class="text-xs text-gray-500 mt-1 hidden md:block">自動換行文字框、自訂字型</p>
+                <span class="md:hidden font-bold text-gray-700">工具箱</span>
+            </div>
+            <button onclick="toggleSidebar()" class="md:hidden p-1 bg-white rounded-full border">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+
+        <!-- Scrollable Content -->
+        <div class="flex-1 overflow-y-auto">
+            
+            <!-- Section: Upload -->
+            <div class="p-4 border-b border-gray-100">
+                <h2 class="text-xs font-bold text-gray-500 mb-3 uppercase tracking-wider">檔案管理</h2>
+                <div class="grid grid-cols-2 gap-2">
+                    <!-- Upload Image -->
+                    <label class="flex items-center justify-center px-3 py-2 bg-blue-50 text-blue-600 text-sm font-medium rounded-lg cursor-pointer hover:bg-blue-100 border border-blue-200 transition" title="也可以直接拖放圖片到畫布">
+                        <i data-lucide="image-plus" class="w-4 h-4 mr-2"></i> 上傳圖片
+                        <input type="file" id="fileInput" multiple accept="image/*,.json" class="hidden">
+                    </label>
+                    
+                    <!-- Upload Font -->
+                    <label class="flex items-center justify-center px-3 py-2 bg-purple-50 text-purple-600 text-sm font-medium rounded-lg cursor-pointer hover:bg-purple-100 border border-purple-200 transition" title="上傳 TTF, OTF, WOFF 等字型">
+                        <i data-lucide="type" class="w-4 h-4 mr-2"></i> 上傳字型
+                        <input type="file" id="globalFontInput" multiple accept=".ttf,.otf,.woff,.woff2" class="hidden">
+                    </label>
+                </div>
+
+                <div class="mt-3 border-t border-dashed border-gray-200 pt-3">
+                    <h3 class="text-[10px] font-bold text-gray-400 mb-2 uppercase">直接導出 (資料夾)</h3>
+                    <p class="text-[10px] text-gray-500 mb-2 leading-tight">直接寫入硬碟，無須解壓 (Chrome/Edge)</p>
+                    <div class="grid grid-cols-2 gap-2">
+                         <!-- Export Single -->
+                        <button onclick="exportSingleImage()" class="flex items-center justify-center px-2 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 border border-green-200 transition text-xs font-medium" title="選擇資料夾 -> 自動建立新資料夾並存入檔案">
+                            <i data-lucide="folder-plus" class="w-3 h-3 mr-1"></i> 單張導出
+                        </button>
+                         <!-- Batch Export -->
+                        <button onclick="exportBatchImages()" id="batchExportBtn" class="flex items-center justify-center px-2 py-2 bg-orange-50 text-orange-700 rounded-lg hover:bg-orange-100 border border-orange-200 transition text-xs font-medium" title="選擇資料夾 -> 自動建立專案目錄並存入所有圖片">
+                            <i data-lucide="layers" class="w-3 h-3 mr-1"></i> 批量導出
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section: Favorites / Presets -->
+            <div class="p-4 border-b border-gray-100 bg-yellow-50/50">
+                <h2 class="text-xs font-bold text-gray-500 mb-2 uppercase tracking-wider flex justify-between items-center">
+                    我的最愛樣式
+                    <span class="text-[10px] bg-yellow-200 text-yellow-800 px-1 rounded">LocalStorage</span>
+                </h2>
+                <div id="presetsList" class="flex flex-wrap gap-2 mb-2 min-h-[40px]">
+                    <!-- Presets injected here -->
+                    <span class="text-xs text-gray-400 italic w-full text-center py-2">暫無收藏</span>
+                </div>
+                <button onclick="saveCurrentAsPreset()" id="savePresetBtn" class="w-full py-1.5 text-xs bg-white border border-yellow-300 text-yellow-700 rounded hover:bg-yellow-50 transition opacity-50 cursor-not-allowed" disabled>
+                    <i data-lucide="star" class="w-3 h-3 inline mr-1"></i> 把當前選取物件存為樣式
+                </button>
+            </div>
+
+            <!-- Section: Add Objects -->
+            <div class="p-4 border-b border-gray-100">
+                <h2 class="text-xs font-bold text-gray-500 mb-3 uppercase tracking-wider">新增物件</h2>
+                
+                <!-- Standard Tools -->
+                <div class="grid grid-cols-2 gap-2 mb-3">
+                    <button onclick="addText()" class="tool-btn flex items-center justify-center p-2 bg-gray-50 rounded hover:bg-gray-100 border border-gray-200 text-sm">
+                        <i data-lucide="type" class="w-4 h-4 mr-2"></i> 純文字
+                    </button>
+                    <!-- Custom Bubble Upload Button -->
+                    <label class="tool-btn flex items-center justify-center p-2 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 border border-blue-200 text-sm cursor-pointer shadow-sm">
+                        <i data-lucide="upload-cloud" class="w-4 h-4 mr-2"></i> 上傳氣泡
+                        <input type="file" id="bubbleInput" accept="image/*" class="hidden">
+                    </label>
+                </div>
+
+                <!-- Custom Bubble Library (Dynamically Populated) -->
+                <div id="customBubblesArea" class="hidden mb-3">
+                    <h3 class="text-[10px] font-bold text-gray-400 mb-2 uppercase">最近使用的氣泡</h3>
+                    <div id="customBubbleButtons" class="grid grid-cols-4 gap-2">
+                        <!-- Dynamic buttons go here -->
+                    </div>
+                </div>
+
+                <!-- Default Shapes -->
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="addBubble('ellipse')" class="tool-btn flex items-center justify-center p-2 bg-gray-50 rounded hover:bg-gray-100 border border-gray-200 text-sm">
+                        <div class="w-3 h-2 border border-current rounded-full mr-2"></div> 圓形
+                    </button>
+                    <button onclick="addBubble('rect')" class="tool-btn flex items-center justify-center p-2 bg-gray-50 rounded hover:bg-gray-100 border border-gray-200 text-sm">
+                        <div class="w-3 h-2 border border-current rounded-sm mr-2"></div> 方形
+                    </button>
+                    <button onclick="addBubble('cloud')" class="tool-btn flex items-center justify-center p-2 bg-gray-50 rounded hover:bg-gray-100 border border-gray-200 text-sm">
+                        <i data-lucide="cloud" class="w-4 h-4 mr-2"></i> 思考雲
+                    </button>
+                    <button onclick="addBubble('shout')" class="tool-btn flex items-center justify-center p-2 bg-gray-50 rounded hover:bg-gray-100 border border-gray-200 text-sm">
+                        <i data-lucide="zap" class="w-4 h-4 mr-2"></i> 爆炸
+                    </button>
+                </div>
+            </div>
+
+            <!-- Section: Properties (Dynamic) -->
+            <div id="propertiesPanel" class="p-4 opacity-50 pointer-events-none transition-opacity">
+                <h2 class="text-xs font-bold text-gray-500 mb-3 uppercase tracking-wider flex justify-between items-center">
+                    編輯屬性
+                    <button onclick="deleteActiveObject()" class="text-red-500 hover:bg-red-50 p-1 rounded transition" title="刪除">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
+                </h2>
+                
+                <!-- Object Scale Control -->
+                <div class="mb-4 pb-3 border-b border-gray-200">
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="text-xs text-gray-500 font-bold">物件大小 (Scale)</label>
+                        <span id="scaleValueDisplay" class="text-[10px] bg-gray-100 px-1 rounded text-gray-600">1.0x</span>
+                    </div>
+                    <input type="range" id="globalScaleInput" min="0.1" max="3.0" step="0.1" value="1" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                </div>
+
+                <!-- NEW: Deformation / Skew Controls -->
+                <div class="mb-4 pb-3 border-b border-gray-200">
+                    <div class="flex justify-between items-center mb-2">
+                        <label class="text-xs text-gray-500 font-bold">變形 (Skew)</label>
+                        <button onclick="resetSkew()" class="text-[10px] text-blue-500 hover:underline">重置</button>
+                    </div>
+                    <div class="flex flex-col gap-2">
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] text-gray-400 w-3">X</span>
+                            <input type="range" id="skewXInput" min="-45" max="45" step="1" value="0" class="flex-1 h-1 bg-gray-200 rounded appearance-none cursor-pointer" title="水平傾斜">
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] text-gray-400 w-3">Y</span>
+                            <input type="range" id="skewYInput" min="-45" max="45" step="1" value="0" class="flex-1 h-1 bg-gray-200 rounded appearance-none cursor-pointer" title="垂直傾斜">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Text Controls -->
+                <div id="textControls" class="hidden space-y-3">
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <label class="text-xs text-gray-500">文字內容</label>
+                            <label class="flex items-center text-xs text-blue-600 cursor-pointer select-none">
+                                <input type="checkbox" id="verticalTextToggle" class="mr-1 rounded text-blue-500 focus:ring-blue-400">
+                                直排模式
+                            </label>
+                        </div>
+                        <textarea id="textInput" rows="3" class="w-full p-2 text-sm border rounded focus:ring-2 focus:ring-blue-500 outline-none resize-none"></textarea>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2">
+                        <div class="col-span-2">
+                            <label class="text-xs text-gray-500 mb-1 block flex justify-between">
+                                字型
+                                <span class="text-[10px] text-gray-400 font-normal">支援 TTF/OTF/WOFF</span>
+                            </label>
+                            <div class="flex gap-1">
+                                <select id="fontFamily" class="flex-1 p-2 text-sm border rounded bg-white w-0">
+                                    <optgroup label="預設字型">
+                                        <option value="Noto Sans TC">黑體 (Noto Sans)</option>
+                                        <option value="Noto Serif TC">宋體 (Noto Serif)</option>
+                                        <option value="ZCOOL KuaiLe">快樂體 (手寫風)</option>
+                                        <option value="DotGothic16">像素體 (Gothic)</option>
+                                        <option value="Arial">系統預設 (Arial)</option>
+                                    </optgroup>
+                                    <optgroup id="customFontsOptGroup" label="我的字型 (IndexedDB)">
+                                        <!-- Custom fonts injected here -->
+                                    </optgroup>
+                                </select>
+                                
+                                <label class="p-2 bg-blue-50 text-blue-600 rounded cursor-pointer hover:bg-blue-100 border border-blue-200" title="上傳字型檔案">
+                                    <i data-lucide="plus" class="w-4 h-4"></i>
+                                    <input type="file" id="fontFileInput" accept=".ttf,.otf,.woff,.woff2" class="hidden">
+                                </label>
+                                
+                                <button id="deleteFontBtn" class="p-2 bg-red-50 text-red-500 rounded hover:bg-red-100 border border-red-200 hidden" title="刪除此字型">
+                                    <i data-lucide="trash" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-500 mb-1 block">顏色</label>
+                            <div class="flex items-center h-9 border rounded bg-white px-1">
+                                <input type="color" id="textColor" class="w-6 h-6 border-none bg-transparent cursor-pointer p-0">
+                                <span class="text-xs ml-2 text-gray-500 truncate" id="textColorValue">#000000</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-500 mb-1 block">字體大小 (px)</label>
+                            <input type="number" id="fontSize" class="w-full p-2 text-sm border rounded h-9">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Shape Controls -->
+                <div id="shapeControls" class="hidden space-y-3">
+                    <div id="nativeShapeControls">
+                        <div class="flex items-center gap-2 mb-2">
+                             <div class="flex-1">
+                                <label class="text-xs text-gray-500 mb-1 block">填充</label>
+                                <input type="color" id="fillColor" class="w-full h-8 rounded cursor-pointer border border-gray-300 p-0">
+                             </div>
+                             <div class="flex-1 pt-4">
+                                <label class="flex items-center gap-1 text-xs cursor-pointer">
+                                    <input type="checkbox" id="transparentFill" class="rounded text-blue-500"> 透明背景
+                                </label>
+                             </div>
+                        </div>
+                        <div class="flex gap-2">
+                            <div class="flex-1">
+                                <label class="text-xs text-gray-500 mb-1 block">邊框顏色</label>
+                                <input type="color" id="strokeColor" class="w-full h-8 rounded cursor-pointer border border-gray-300 p-0">
+                            </div>
+                            <div class="flex-1">
+                                <label class="text-xs text-gray-500 mb-1 block">邊框粗細</label>
+                                <input type="number" id="strokeWidthInput" min="0" max="20" class="w-full p-1 text-sm border rounded h-8">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="imageBubbleControls" class="hidden">
+                        <p class="text-xs text-gray-400 italic">這是一個自訂圖片氣泡，無法更改顏色。</p>
+                        <div class="mt-2">
+                            <label class="text-xs text-gray-500 mb-1 block">透明度</label>
+                            <input type="range" id="opacityInput" min="0" max="1" step="0.1" class="w-full">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-4 pt-4 border-t border-gray-200 flex gap-2">
+                     <button onclick="sendBackwards()" class="flex-1 py-1.5 px-2 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50 text-gray-600">下移一層</button>
+                     <button onclick="bringForward()" class="flex-1 py-1.5 px-2 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50 text-gray-600">上移一層</button>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 flex flex-col relative bg-gray-200 overflow-hidden">
+        
+        <!-- Canvas Wrapper / Drop Zone -->
+        <div id="canvas-wrapper" class="flex-1 overflow-hidden relative canvas-container-bg flex items-center justify-center touch-none">
+            
+            <!-- The Canvas -->
+            <canvas id="c"></canvas>
+            
+            <!-- Drag & Drop Overlay -->
+            <div id="dropOverlay" class="absolute inset-0 bg-blue-100/80 border-4 border-blue-400 border-dashed z-50 flex flex-col items-center justify-center hidden pointer-events-none">
+                 <div class="flex flex-col items-center animate-bounce">
+                    <i data-lucide="upload-cloud" class="w-20 h-20 text-blue-500 mb-4"></i>
+                    <i data-lucide="file-json" class="w-12 h-12 text-green-500 absolute -right-2 -bottom-2"></i>
+                 </div>
+                 <p class="text-2xl font-bold text-blue-600 mt-2">放開滑鼠以上傳</p>
+                 <p class="text-sm text-blue-400">支援 圖片 / 字型 / JSON數據</p>
+            </div>
+
+            <!-- Empty State -->
+            <div id="emptyState" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 pointer-events-none z-0">
+                <i data-lucide="image" class="w-16 h-16 mb-4 opacity-50"></i>
+                <p class="text-lg">拖放圖片到此處</p>
+                <p class="text-sm opacity-60 mt-2">支援拖入 JSON 檔案還原編輯</p>
+            </div>
+
+            <!-- Floating Zoom Controls -->
+            <div class="absolute bottom-6 right-6 flex flex-col gap-2 z-10">
+                <div class="bg-white rounded-lg shadow-lg border border-gray-200 flex flex-col overflow-hidden items-center">
+                    <button onclick="setZoom(0.1)" class="p-2 hover:bg-gray-100 active:bg-gray-200 border-b border-gray-100" title="放大">
+                        <i data-lucide="plus" class="w-4 h-4 text-gray-700"></i>
+                    </button>
+                    
+                    <!-- NEW: Zoom Slider Bar -->
+                    <div class="zoom-slider-container py-2 bg-gray-50 border-b border-gray-100">
+                        <!-- Changed min/max to restrict range (0.3 to 1.0) -->
+                        <input type="range" id="viewZoomSlider" min="0.3" max="1.0" step="0.05" value="1.0" class="vertical-slider appearance-none bg-gray-200 h-1 rounded cursor-pointer" title="縮放畫布">
+                    </div>
+
+                    <button onclick="fitToScreen()" class="p-2 hover:bg-gray-100 active:bg-gray-200 border-b border-gray-100 text-xs font-bold text-gray-600" title="適配螢幕 (Fit)">
+                        Fit
+                    </button>
+                    <button onclick="setZoom(-0.1)" class="p-2 hover:bg-gray-100 active:bg-gray-200" title="縮小">
+                        <i data-lucide="minus" class="w-4 h-4 text-gray-700"></i>
+                    </button>
+                </div>
+                <div class="bg-white px-2 py-1 rounded shadow text-xs text-center font-mono" id="zoomLevelDisplay">100%</div>
+            </div>
+        </div>
+
+        <!-- Bottom Thumbnails Bar -->
+        <div id="thumbnailsBar" class="h-24 bg-white border-t border-gray-200 flex items-center gap-3 px-4 overflow-x-auto whitespace-nowrap z-20 shrink-0 hidden">
+            <!-- JS inserts thumbnails here -->
+        </div>
+
+        <!-- Loading Overlay (For Batch Export) -->
+        <div id="loadingOverlay" class="fixed inset-0 bg-black/50 z-50 hidden flex flex-col items-center justify-center text-white">
+            <div class="loader mb-4 border-t-white"></div>
+            <p id="loadingText" class="font-bold">處理中...</p>
+        </div>
+    </main>
+
+    <!-- Overlay for mobile sidebar -->
+    <div id="sidebarOverlay" onclick="toggleSidebar()" class="fixed inset-0 bg-black/50 z-20 hidden md:hidden"></div>
+
+    <script>
+        lucide.createIcons();
+
+        // --- Global State ---
+        let canvas;
+        // uploadedImages structure updated: { id, url, canvasData: object|null, fileName: string }
+        let uploadedImages = []; 
+        let currentImageIndex = -1;
+        let presets = JSON.parse(localStorage.getItem('comic_presets') || '[]');
+        let sessionBubbles = [];
+        let customFonts = []; 
+
+        const DB_NAME = 'ComicFontsDB';
+        const DB_VERSION = 1;
+        const STORE_NAME = 'fonts';
+        let db;
+
+        // Magic Separator for embedding data in PNG
+        const MAGIC_SEPARATOR = "||COMIC_META_DATA||";
+
+        // --- Initialization ---
+        async function initCanvas() {
+            try {
+                await initDB();
+                await loadFontsFromDB();
+            } catch (err) {
+                console.warn('IndexedDB initialization failed:', err);
+            }
+
+            canvas = new fabric.Canvas('c', {
+                preserveObjectStacking: true,
+                backgroundColor: '#ffffff',
+                selection: true
+            });
+
+            // Zooming
+            canvas.on('mouse:wheel', function(opt) {
+                var delta = opt.e.deltaY;
+                var zoom = canvas.getZoom();
+                zoom *= 0.999 ** delta;
+                if (zoom > 1.0) zoom = 1.0;
+                if (zoom < 0.3) zoom = 0.3;
+                canvas.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, zoom);
+                opt.e.preventDefault();
+                opt.e.stopPropagation();
+                updateZoomDisplay();
+            });
+
+            // Panning
+            let isDragging = false;
+            let lastPosX, lastPosY;
+            canvas.on('mouse:down', function(opt) {
+                var evt = opt.e;
+                if (evt.button === 1 || evt.altKey || (canvas.getObjects().length > 0 && !canvas.findTarget(evt))) {
+                    isDragging = true;
+                    canvas.selection = false;
+                    lastPosX = evt.clientX;
+                    lastPosY = evt.clientY;
+                    canvas.defaultCursor = 'grabbing';
+                    if (evt.button === 1) evt.preventDefault();
+                }
+            });
+            canvas.on('mouse:move', function(opt) {
+                if (isDragging) {
+                    var e = opt.e;
+                    var vpt = canvas.viewportTransform;
+                    vpt[4] += e.clientX - lastPosX;
+                    vpt[5] += e.clientY - lastPosY;
+                    canvas.requestRenderAll();
+                    lastPosX = e.clientX;
+                    lastPosY = e.clientY;
+                }
+            });
+            canvas.on('mouse:up', function(opt) {
+                canvas.setViewportTransform(canvas.viewportTransform);
+                isDragging = false;
+                canvas.selection = true;
+                canvas.defaultCursor = 'default';
+                
+                // Save state when user finishes interacting (simple auto-save to memory)
+                saveCurrentCanvasState();
+            });
+
+            // Events
+            canvas.on('selection:created', handleSelection);
+            canvas.on('selection:updated', handleSelection);
+            canvas.on('selection:cleared', clearSelection);
+            
+            canvas.on('text:changed', function(e) {
+                const obj = canvas.getActiveObject();
+                // Support both legacy i-text and new textbox
+                if (obj && (obj.type === 'i-text' || obj.type === 'text' || obj.type === 'textbox')) {
+                    const rawText = obj.text;
+                    const isVertical = document.getElementById('verticalTextToggle').checked;
+                    document.getElementById('textInput').value = isVertical ? rawText.replace(/\n/g, '') : rawText;
+                }
+            });
+            
+            canvas.on('object:scaling', function(e) {
+                const obj = e.target;
+                if (obj) {
+                    const scale = obj.scaleX.toFixed(2);
+                    document.getElementById('globalScaleInput').value = scale;
+                    document.getElementById('scaleValueDisplay').innerText = scale + 'x';
+                    
+                    // NEW: Dynamic Reflow for Vertical Text during scaling
+                    if (obj.isVertical && (obj.type === 'text' || obj.type === 'textbox' || obj.type === 'i-text')) {
+                        // We use the object's current scaled height as the constraint
+                        const currentHeight = obj.height * obj.scaleY;
+                        // Re-apply text with new height constraint
+                        applyVerticalTextLayout(obj, obj.rawText || obj.text, currentHeight);
+                    }
+                }
+            });
+            
+            // Save state on object modification
+            canvas.on('object:modified', saveCurrentCanvasState);
+            canvas.on('object:added', saveCurrentCanvasState);
+            canvas.on('object:removed', saveCurrentCanvasState);
+
+            window.addEventListener('keydown', (e) => {
+                if ((e.key === 'Delete' || e.key === 'Backspace')) {
+                    const activeElement = document.activeElement;
+                    if (activeElement.tagName !== 'INPUT' && activeElement.tagName !== 'TEXTAREA' && !canvas.getActiveObject()?.isEditing) {
+                        deleteActiveObject();
+                    }
+                }
+            });
+            
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+
+            renderPresets();
+            setupDragAndDrop();
+        }
+
+        // --- State Management ---
+        function saveCurrentCanvasState() {
+            if (currentImageIndex === -1) return;
+            // Serialize canvas to JSON, excluding background image from the main JSON 
+            // because we handle background separately in uploadedImages array to avoid duplication/lag
+            const json = canvas.toJSON(['customType', 'id', 'selectable', 'splitByGrapheme']);
+            // Remove background image from json to keep it light, we rely on uploadedImages.url
+            delete json.backgroundImage; 
+            uploadedImages[currentImageIndex].canvasData = json;
+        }
+
+        // --- IndexedDB & Fonts (Existing Code) ---
+        function initDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+                request.onerror = (e) => reject('DB Error');
+                request.onupgradeneeded = (e) => {
+                    db = e.target.result;
+                    if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME, { keyPath: 'name' });
+                };
+                request.onsuccess = (e) => { db = e.target.result; resolve(db); };
+            });
+        }
+        function saveFontToDB(name, buffer) {
+            return new Promise((resolve, reject) => {
+                const t = db.transaction([STORE_NAME], 'readwrite');
+                t.objectStore(STORE_NAME).put({ name: name, data: buffer });
+                t.oncomplete = () => resolve();
+                t.onerror = reject;
+            });
+        }
+        function deleteFontFromDB(name) {
+            return new Promise((resolve, reject) => {
+                const t = db.transaction([STORE_NAME], 'readwrite');
+                t.objectStore(STORE_NAME).delete(name);
+                t.oncomplete = () => resolve();
+                t.onerror = reject;
+            });
+        }
+        function getAllFontsFromDB() {
+            return new Promise((resolve, reject) => {
+                const t = db.transaction([STORE_NAME], 'readonly');
+                const req = t.objectStore(STORE_NAME).getAll();
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = reject;
+            });
+        }
+        async function loadFontsFromDB() {
+            const fonts = await getAllFontsFromDB();
+            for (const f of fonts) {
+                await addFontToDocument(f.name, f.data);
+                customFonts.push(f.name);
+            }
+            updateFontSelectUI();
+        }
+        async function addFontToDocument(name, data) {
+            const fontFace = new FontFace(name, data);
+            try {
+                await fontFace.load();
+                document.fonts.add(fontFace);
+                return true;
+            } catch(e) { console.error(e); return false; }
+        }
+        function handleFontUpload(file) {
+            if (!file) return;
+            const fontName = file.name.replace(/\.[^/.]+$/, "");
+            if (customFonts.includes(fontName) && !confirm(`字型 "${fontName}" 已存在，是否覆蓋？`)) return;
+            const reader = new FileReader();
+            reader.onload = async (f) => {
+                const arrayBuffer = f.target.result;
+                const success = await addFontToDocument(fontName, arrayBuffer);
+                if (success) {
+                    try {
+                        await saveFontToDB(fontName, arrayBuffer);
+                        if (!customFonts.includes(fontName)) customFonts.push(fontName);
+                        updateFontSelectUI();
+                        document.getElementById('fontFamily').value = fontName;
+                        updateObject('fontFamily', fontName);
+                        // Removed Alert here? No, user only asked to remove JSON alert. Keeping Font alert is likely fine or consistent.
+                        alert(`字型 "${fontName}" 上傳並儲存成功！`);
+                    } catch (e) { alert('儲存失敗'); }
+                } else { alert('字型載入失敗'); }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+        document.getElementById('fontFileInput').addEventListener('change', (e) => handleFontUpload(e.target.files[0]));
+        document.getElementById('globalFontInput').addEventListener('change', (e) => { Array.from(e.target.files).forEach(f => handleFontUpload(f)); e.target.value = ''; });
+        document.getElementById('deleteFontBtn').addEventListener('click', async () => {
+            const name = document.getElementById('fontFamily').value;
+            if (customFonts.includes(name) && confirm(`刪除 ${name}?`)) {
+                await deleteFontFromDB(name);
+                customFonts = customFonts.filter(n => n !== name);
+                updateFontSelectUI();
+                updateObject('fontFamily', 'Noto Sans TC');
+            }
+        });
+        function updateFontSelectUI() {
+            const group = document.getElementById('customFontsOptGroup');
+            group.innerHTML = '';
+            customFonts.forEach(name => {
+                const opt = document.createElement('option');
+                opt.value = name;
+                opt.innerText = name;
+                group.appendChild(opt);
+            });
+            checkFontDeleteButton(document.getElementById('fontFamily').value);
+        }
+        function checkFontDeleteButton(name) {
+            const btn = document.getElementById('deleteFontBtn');
+            btn.classList.toggle('hidden', !customFonts.includes(name));
+        }
+
+        // --- Core Helpers ---
+        function resizeCanvas() {
+            const wrapper = document.getElementById('canvas-wrapper');
+            canvas.setWidth(wrapper.clientWidth);
+            canvas.setHeight(wrapper.clientHeight);
+            canvas.renderAll();
+        }
+        function setupDragAndDrop() {
+            const wrapper = document.getElementById('canvas-wrapper');
+            const overlay = document.getElementById('dropOverlay');
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt => wrapper.addEventListener(evt, (e) => { e.preventDefault(); e.stopPropagation(); }, false));
+            wrapper.addEventListener('dragenter', () => { wrapper.classList.add('drag-active'); overlay.classList.remove('hidden'); });
+            wrapper.addEventListener('dragleave', (e) => { if (e.relatedTarget && !wrapper.contains(e.relatedTarget)) { wrapper.classList.remove('drag-active'); overlay.classList.add('hidden'); } });
+            overlay.addEventListener('dragleave', () => { wrapper.classList.remove('drag-active'); overlay.classList.add('hidden'); });
+            wrapper.addEventListener('drop', (e) => {
+                wrapper.classList.remove('drag-active'); overlay.classList.add('hidden');
+                handleFiles(e.dataTransfer.files);
+            });
+        }
+        function getVisualCenter() {
+            const vpt = canvas.viewportTransform;
+            return { x: (canvas.getWidth()/2 - vpt[4])/vpt[0], y: (canvas.getHeight()/2 - vpt[5])/vpt[3] };
+        }
+
+        // --- File Handling (Updated for Metadata Import) ---
+        document.getElementById('fileInput').addEventListener('change', function(e) { handleFiles(e.target.files); });
+
+        function handleFiles(files) {
+            if (files.length === 0) return;
+            const fileArray = Array.from(files);
+            let processedCount = 0;
+            const totalImages = fileArray.filter(f => f.type.startsWith('image/')).length;
+            
+            fileArray.forEach(file => {
+                if (file.name.match(/\.(ttf|otf|woff|woff2)$/i)) {
+                    handleFontUpload(file);
+                } 
+                // Handle JSON Import
+                else if (file.name.endsWith('.json') || file.type === 'application/json') {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const json = JSON.parse(e.target.result);
+                            if (currentImageIndex !== -1) {
+                                // Save current BG to restore it after loading JSON
+                                const currentBg = canvas.backgroundImage;
+                                canvas.loadFromJSON(json, function() {
+                                    // Restore the background image because loadFromJSON might wipe it
+                                    // if it's not in the JSON (and we delete it before export)
+                                    if(currentBg) {
+                                        canvas.setBackgroundImage(currentBg, canvas.renderAll.bind(canvas), {
+                                            originX: 'left', originY: 'top'
+                                        });
+                                    } else {
+                                        canvas.renderAll();
+                                    }
+                                    saveCurrentCanvasState(); // Update memory
+                                    // REMOVED ALERT as requested
+                                });
+                            } else {
+                                alert("請先上傳並選擇一張背景圖片，再導入樣式數據 (JSON)。");
+                            }
+                        } catch(err) {
+                            console.error(err);
+                            alert("JSON 讀取失敗，格式可能錯誤。");
+                        }
+                    };
+                    reader.readAsText(file);
+                }
+                // Handle Image Import
+                else if (file.type.startsWith('image/')) {
+                    // Use FileReader to check for metadata
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const arrayBuffer = e.target.result;
+                        const { imageUrl, metadata } = parseImageMetadata(arrayBuffer, file.type);
+                        
+                        uploadedImages.push({
+                            id: Date.now() + Math.random(),
+                            url: imageUrl,
+                            canvasData: metadata, // If found, stores the JSON
+                            fileName: file.name
+                        });
+                        
+                        processedCount++;
+                        if (processedCount === totalImages) {
+                            renderThumbnails();
+                            if (currentImageIndex === -1) loadCanvasImage(0);
+                        }
+                    };
+                    reader.readAsArrayBuffer(file);
+                }
+            });
+        }
+
+        // --- Steganography Logic ---
+        function parseImageMetadata(arrayBuffer, mimeType) {
+            const view = new Uint8Array(arrayBuffer);
+            const separatorBytes = new TextEncoder().encode(MAGIC_SEPARATOR);
+            let separatorIndex = -1;
+            const searchLimit = Math.min(view.length, 5 * 1024 * 1024);
+            const searchEnd = Math.max(0, view.length - searchLimit);
+
+            for (let i = view.length - separatorBytes.length; i >= searchEnd; i--) {
+                if (view[i + separatorBytes.length - 1] !== separatorBytes[separatorBytes.length - 1]) continue;
+                let match = true;
+                for (let j = 0; j < separatorBytes.length; j++) {
+                    if (view[i + j] !== separatorBytes[j]) { match = false; break; }
+                }
+                if (match) { separatorIndex = i; break; }
+            }
+
+            if (separatorIndex !== -1) {
+                try {
+                    const jsonBytes = view.subarray(separatorIndex + separatorBytes.length);
+                    const decoder = new TextDecoder();
+                    const jsonStr = decoder.decode(jsonBytes);
+                    if (jsonStr.trim().startsWith('{')) {
+                        const json = JSON.parse(jsonStr);
+                        const imageBytes = view.subarray(0, separatorIndex);
+                        const blob = new Blob([imageBytes], { type: mimeType });
+                        const url = URL.createObjectURL(blob);
+                        return { imageUrl: url, metadata: json };
+                    }
+                } catch (e) { console.error("Found separator but failed to parse JSON:", e); }
+            }
+            const blob = new Blob([arrayBuffer], { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            return { imageUrl: url, metadata: null };
+        }
+
+        // --- File System Export Helpers ---
+
+        // Helper to write a file handle
+        async function writeFileToHandle(dirHandle, filename, blob) {
+            const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
+            const writable = await fileHandle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+        }
+
+        // --- Export Logic (Folder Based) ---
+        
+        async function generateExportDataForCurrentCanvas(index) {
+            // 1. JSON Data (Pure Data)
+            const jsonObject = canvas.toJSON(['customType', 'id', 'selectable', 'splitByGrapheme']);
+            delete jsonObject.backgroundImage; 
+            const jsonStr = JSON.stringify(jsonObject);
+            const jsonBlob = new Blob([jsonStr], {type: "application/json"});
+
+            // REMOVED overlayBlob generation as requested
+
+            // 2. Final Image (Merged)
+            canvas.renderAll();
+            const finalDataUrl = canvas.toDataURL({ format: 'png', multiplier: 2 });
+            const finalBlob = await (await fetch(finalDataUrl)).blob();
+
+            // 3. Original Image (Raw)
+            const originalBlob = await (await fetch(uploadedImages[index].url)).blob();
+            const originalFullName = uploadedImages[index].fileName;
+            const originalExt = originalFullName.split('.').pop() || 'png';
+            const baseName = originalFullName.replace(/\.[^/.]+$/, "");
+            
+            return {
+                baseName,
+                originalExt,
+                finalBlob,
+                originalBlob,
+                jsonBlob
+            };
+        }
+
+        async function exportSingleImage() {
+            if (currentImageIndex === -1) return alert('無圖片');
+            
+            // Feature Detection for File System Access API
+            if (!window.showDirectoryPicker) {
+                return alert("您的瀏覽器不支援資料夾直接寫入功能 (File System Access API)。\n請使用 Chrome, Edge 或 Opera 瀏覽器。");
+            }
+
+            const overlay = document.getElementById('loadingOverlay');
+            const loadingText = document.getElementById('loadingText');
+            
+            try {
+                // 1. User picks directory first
+                const dirHandle = await window.showDirectoryPicker();
+                
+                overlay.classList.remove('hidden');
+                loadingText.innerText = "正在處理...";
+
+                canvas.discardActiveObject();
+                canvas.renderAll();
+
+                const data = await generateExportDataForCurrentCanvas(currentImageIndex);
+                
+                // 2. Create specific folder for this export
+                const exportDirName = `${data.baseName}_export`;
+                const newDirHandle = await dirHandle.getDirectoryHandle(exportDirName, { create: true });
+
+                // 3. Write files
+                loadingText.innerText = "正在寫入檔案...";
+                await writeFileToHandle(newDirHandle, `${data.baseName}_final.png`, data.finalBlob);
+                await writeFileToHandle(newDirHandle, `${data.baseName}_original.${data.originalExt}`, data.originalBlob);
+                await writeFileToHandle(newDirHandle, `${data.baseName}_data.json`, data.jsonBlob);
+                
+                alert(`導出完成！\n已儲存至資料夾: ${exportDirName}`);
+
+            } catch (e) {
+                // Ignore AbortError (User cancelled folder picker)
+                if (e.name !== 'AbortError') {
+                    console.error(e);
+                    alert("匯出失敗：" + e.message);
+                }
+            } finally {
+                overlay.classList.add('hidden');
+            }
+        }
+
+        async function exportBatchImages() {
+            if (uploadedImages.length === 0) return alert('無圖片');
+
+            if (!window.showDirectoryPicker) {
+                return alert("您的瀏覽器不支援資料夾直接寫入功能 (File System Access API)。\n請使用 Chrome, Edge 或 Opera 瀏覽器。");
+            }
+            
+            const overlay = document.getElementById('loadingOverlay');
+            const loadingText = document.getElementById('loadingText');
+            
+            try {
+                // 1. User picks root directory
+                const rootHandle = await window.showDirectoryPicker();
+                
+                // 2. Create Project Folder
+                const projectName = `Comic_Batch_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}`;
+                const projectDirHandle = await rootHandle.getDirectoryHandle(projectName, { create: true });
+
+                overlay.classList.remove('hidden');
+                saveCurrentCanvasState();
+                
+                const originalIndex = currentImageIndex;
+                
+                for (let i = 0; i < uploadedImages.length; i++) {
+                    loadingText.innerText = `正在處理第 ${i+1} / ${uploadedImages.length} 張...`;
+                    
+                    await new Promise(resolve => {
+                        loadCanvasImage(i, resolve); 
+                    });
+                    
+                    canvas.discardActiveObject();
+                    canvas.renderAll();
+                    
+                    const data = await generateExportDataForCurrentCanvas(i);
+                    
+                    // Create subfolder for each page
+                    // e.g. "01_Filename"
+                    const pageDirName = `${String(i+1).padStart(2, '0')}_${data.baseName}`;
+                    const pageDirHandle = await projectDirHandle.getDirectoryHandle(pageDirName, { create: true });
+                    
+                    await writeFileToHandle(pageDirHandle, `${data.baseName}_final.png`, data.finalBlob);
+                    await writeFileToHandle(pageDirHandle, `${data.baseName}_original.${data.originalExt}`, data.originalBlob);
+                    await writeFileToHandle(pageDirHandle, `${data.baseName}_data.json`, data.jsonBlob);
+                }
+                
+                loadCanvasImage(originalIndex);
+                alert(`批量導出完成！\n所有檔案已儲存至: ${projectName}`);
+                
+            } catch (e) {
+                if (e.name !== 'AbortError') {
+                    console.error(e);
+                    alert("匯出失敗：" + e.message);
+                }
+            } finally {
+                overlay.classList.add('hidden');
+            }
+        }
+
+        // --- Canvas Loading ---
+        function renderThumbnails() {
+            const bar = document.getElementById('thumbnailsBar');
+            bar.innerHTML = '';
+            if (uploadedImages.length > 0) bar.classList.remove('hidden');
+
+            uploadedImages.forEach((img, idx) => {
+                const thumb = document.createElement('div');
+                thumb.className = `thumbnail w-16 h-16 rounded overflow-hidden border-2 bg-gray-100 cursor-pointer shrink-0 ${idx === currentImageIndex ? 'active' : 'border-transparent'}`;
+                thumb.innerHTML = `<img src="${img.url}" class="w-full h-full object-cover">`;
+                thumb.onclick = () => loadCanvasImage(idx);
+                bar.appendChild(thumb);
+            });
+        }
+
+        function loadCanvasImage(index, callback) {
+            if (index >= uploadedImages.length) index = uploadedImages.length - 1;
+            if (index < 0) return;
+
+            currentImageIndex = index;
+            renderThumbnails();
+            document.getElementById('emptyState').style.display = 'none';
+
+            fabric.Image.fromURL(uploadedImages[index].url, (img) => {
+                canvas.clear();
+                
+                // Set Background
+                canvas.setBackgroundImage(img, () => {
+                    const savedData = uploadedImages[index].canvasData;
+                    if (savedData) {
+                        canvas.loadFromJSON(savedData, () => {
+                            // Restore BG after JSON load
+                            canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas), {
+                                originX: 'left', originY: 'top'
+                            });
+                            fitToScreen();
+                            if(callback) callback();
+                        });
+                    } else {
+                        canvas.renderAll();
+                        fitToScreen();
+                        if(callback) callback();
+                    }
+                }, {
+                    originX: 'left',
+                    originY: 'top'
+                });
+            });
+        }
+
+        // --- Other Utils (Existing) ---
+        document.getElementById('viewZoomSlider').addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            const center = canvas.getCenter();
+            canvas.zoomToPoint({ x: center.left, y: center.top }, val);
+            updateZoomDisplay();
+        });
+        function setZoom(delta) {
+            let zoom = canvas.getZoom();
+            if (delta > 0) zoom *= 1.05; else zoom *= 0.95;
+            if (zoom > 1.0) zoom = 1.0;
+            if (zoom < 0.3) zoom = 0.3;
+            const center = canvas.getCenter();
+            canvas.zoomToPoint({ x: center.left, y: center.top }, zoom);
+            updateZoomDisplay();
+        }
+        function fitToScreen() {
+            if (currentImageIndex === -1 || !canvas.backgroundImage) return;
+            const imgObj = canvas.backgroundImage;
+            const vW = canvas.getWidth();
+            const vH = canvas.getHeight();
+            const padding = 20;
+            const scale = Math.min((vW - padding * 2) / imgObj.width, (vH - padding * 2) / imgObj.height);
+            const transX = (vW - imgObj.width * scale) / 2;
+            const transY = (vH - imgObj.height * scale) / 2;
+            canvas.setViewportTransform([scale, 0, 0, scale, transX, transY]);
+            updateZoomDisplay();
+        }
+        function updateZoomDisplay() {
+            const zoom = canvas.getZoom();
+            document.getElementById('zoomLevelDisplay').innerText = Math.round(zoom * 100) + '%';
+            document.getElementById('viewZoomSlider').value = zoom;
+        }
+
+        // --- Objects Logic ---
+        function addText(options = {}) {
+            if (currentImageIndex === -1) return alert('請先上傳圖片');
+            const center = getVisualCenter();
+            const defaultFont = customFonts.length > 0 ? customFonts[0] : 'Noto Sans TC';
+            // Use Textbox instead of IText for auto-wrapping
+            const text = new fabric.Textbox('輸入文字', {
+                left: center.x, top: center.y,
+                fontFamily: options.fontFamily || defaultFont,
+                fill: options.fill || '#000000',
+                fontSize: options.fontSize || 40,
+                lineHeight: 1.2,
+                width: 300, 
+                splitByGrapheme: true,
+                // Custom properties
+                rawText: '輸入文字',
+                isVertical: false
+            });
+            canvas.add(text);
+            canvas.setActiveObject(text);
+        }
+        function addBubble(type, options = {}) {
+            if (currentImageIndex === -1) return alert('請先上傳圖片');
+            const center = getVisualCenter();
+            let shape;
+            const common = { fill: options.fill || '#ffffff', stroke: options.stroke || '#000000', strokeWidth: options.strokeWidth || 3, originX: 'center', originY: 'center', strokeUniform: true };
+            if (type === 'ellipse') shape = new fabric.Ellipse({ rx: 80, ry: 50, left: center.x, top: center.y, ...common });
+            else if (type === 'rect') shape = new fabric.Rect({ width: 160, height: 100, rx: 10, ry: 10, left: center.x, top: center.y, ...common });
+            else if (type === 'cloud') {
+                const path = "M 89.26 31.62 C 92.49 19.95 106.87 14.56 116.89 21.62 C 122.99 15.68 132.84 14.59 139.75 19.45 C 145.74 12.87 156.46 11.83 163.63 17.15 C 173.81 9.06 189.69 13.98 192.51 26.69 C 203.22 27.56 210.63 38.31 207.28 48.49 C 215.11 54.89 213.88 67.58 205.15 72.33 C 206.58 84.14 196.48 93.88 184.88 92.29 C 179.91 101.45 167.38 103.58 159.04 97.43 C 151.27 103.95 139.38 101.62 134.33 92.93 C 127.27 98.66 116.96 96.09 113.13 87.89 C 103.35 91.07 93.68 83.99 93.99 73.65 C 84.09 69.85 81.39 57.06 88.64 49.33 C 81.71 42.06 85.04 29.87 94.62 26.69 L 89.26 31.62 Z";
+                shape = new fabric.Path(path, { scaleX: 1.2, scaleY: 1.2, left: center.x, top: center.y, ...common });
+            } else if (type === 'shout') {
+                const path = "M 46 22 L 56 10 L 68 20 L 85 8 L 90 22 L 110 18 L 105 32 L 125 40 L 110 52 L 128 65 L 110 75 L 120 90 L 100 88 L 90 105 L 75 92 L 60 108 L 50 90 L 30 100 L 35 85 L 15 80 L 30 65 L 10 50 L 30 40 L 15 25 L 35 25 Z";
+                shape = new fabric.Path(path, { scaleX: 2, scaleY: 1.8, left: center.x, top: center.y, ...common });
+            }
+            canvas.add(shape);
+            
+            // Textbox for auto-wrapping inside bubble
+            const text = new fabric.Textbox('對話', { 
+                left: center.x, top: center.y, 
+                fontFamily: 'Noto Sans TC', 
+                fontSize: 24, 
+                originX: 'center', originY: 'center',
+                width: 140,
+                splitByGrapheme: true,
+                textAlign: 'center',
+                rawText: '對話',
+                isVertical: false
+            });
+            canvas.add(text);
+            canvas.setActiveObject(text);
+        }
+        document.getElementById('bubbleInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file || currentImageIndex === -1) return;
+            const reader = new FileReader();
+            reader.onload = (f) => {
+                const imgObj = new Image();
+                imgObj.src = f.target.result;
+                imgObj.onload = function() {
+                    const tempCanvas = document.createElement('canvas');
+                    const MAX_WIDTH = 800; 
+                    const scaleFactor = MAX_WIDTH / imgObj.width;
+                    const newW = imgObj.width > MAX_WIDTH ? MAX_WIDTH : imgObj.width;
+                    const newH = imgObj.width > MAX_WIDTH ? imgObj.height * scaleFactor : imgObj.height;
+                    tempCanvas.width = newW;
+                    tempCanvas.height = newH;
+                    const ctx = tempCanvas.getContext('2d');
+                    ctx.drawImage(imgObj, 0, 0, newW, newH);
+                    const optimizedDataURL = tempCanvas.toDataURL('image/png');
+                    addCustomBubbleToCanvas(optimizedDataURL);
+                    addBubbleToToolbar(optimizedDataURL);
+                }
+            };
+            reader.readAsDataURL(file);
+            e.target.value = ''; 
+        });
+        function addCustomBubbleToCanvas(dataURL) {
+            fabric.Image.fromURL(dataURL, (fabricImg) => {
+                const zoom = canvas.getZoom();
+                const center = getVisualCenter();
+                const wrapper = document.getElementById('canvas-wrapper');
+                const targetWidth = (wrapper.clientWidth / zoom) * 0.4;
+                fabricImg.scaleToWidth(targetWidth);
+                fabricImg.set({ left: center.x, top: center.y, originX: 'center', originY: 'center', customType: 'image-bubble', src: dataURL });
+                canvas.add(fabricImg);
+                
+                // Textbox for custom bubble
+                const text = new fabric.Textbox('對話', { 
+                    left: center.x, top: center.y, 
+                    fontFamily: 'Noto Sans TC', 
+                    fontSize: 20, 
+                    originX: 'center', originY: 'center', 
+                    width: targetWidth * 0.6,
+                    splitByGrapheme: true,
+                    textAlign: 'center',
+                    rawText: '對話',
+                    isVertical: false
+                });
+                canvas.add(text);
+                canvas.setActiveObject(text);
+                canvas.renderAll();
+            });
+        }
+        function addBubbleToToolbar(dataURL) {
+            const container = document.getElementById('customBubbleButtons');
+            document.getElementById('customBubblesArea').classList.remove('hidden');
+            const btn = document.createElement('button');
+            btn.className = 'tool-btn relative aspect-square bg-white rounded border border-gray-200 hover:border-blue-400 overflow-hidden';
+            btn.innerHTML = `<img src="${dataURL}" class="w-full h-full object-contain p-1">`;
+            btn.onclick = () => addCustomBubbleToCanvas(dataURL);
+            container.appendChild(btn);
+        }
+
+        function handleSelection(e) {
+            const obj = e.selected[0];
+            document.getElementById('propertiesPanel').classList.remove('opacity-50', 'pointer-events-none');
+            document.getElementById('savePresetBtn').disabled = false;
+            document.getElementById('savePresetBtn').classList.remove('opacity-50', 'cursor-not-allowed');
+            
+            const scale = obj.scaleX.toFixed(2);
+            document.getElementById('globalScaleInput').value = scale;
+            document.getElementById('scaleValueDisplay').innerText = scale + 'x';
+
+            // Load Skew Values
+            document.getElementById('skewXInput').value = obj.skewX || 0;
+            document.getElementById('skewYInput').value = obj.skewY || 0;
+
+            if (obj.type === 'i-text' || obj.type === 'text' || obj.type === 'textbox') {
+                showSection('textControls');
+                // Check stored property, default to analysis if missing
+                const isVertical = obj.isVertical !== undefined ? obj.isVertical : false;
+                
+                document.getElementById('verticalTextToggle').checked = isVertical;
+                
+                // Show raw text in input (editable), show rendered text on canvas
+                document.getElementById('textInput').value = obj.rawText || obj.text;
+                
+                document.getElementById('fontFamily').value = obj.fontFamily;
+                checkFontDeleteButton(obj.fontFamily);
+                document.getElementById('textColor').value = obj.fill;
+                document.getElementById('textColorValue').innerText = obj.fill;
+                document.getElementById('fontSize').value = obj.fontSize;
+            } else {
+                showSection('shapeControls');
+                if (obj.type === 'image' || obj.customType === 'image-bubble') {
+                    document.getElementById('nativeShapeControls').classList.add('hidden');
+                    document.getElementById('imageBubbleControls').classList.remove('hidden');
+                    document.getElementById('opacityInput').value = obj.opacity;
+                } else {
+                    document.getElementById('nativeShapeControls').classList.remove('hidden');
+                    document.getElementById('imageBubbleControls').classList.add('hidden');
+                    document.getElementById('fillColor').value = obj.fill === 'transparent' ? '#ffffff' : obj.fill;
+                    document.getElementById('transparentFill').checked = obj.fill === 'transparent' || !obj.fill;
+                    document.getElementById('strokeColor').value = obj.stroke;
+                    document.getElementById('strokeWidthInput').value = obj.strokeWidth;
+                }
+            }
+        }
+        function clearSelection() {
+            document.getElementById('propertiesPanel').classList.add('opacity-50', 'pointer-events-none');
+            document.getElementById('savePresetBtn').disabled = true;
+            document.getElementById('savePresetBtn').classList.add('opacity-50', 'cursor-not-allowed');
+            checkFontDeleteButton('');
+            
+            // Reset sliders visually
+            document.getElementById('skewXInput').value = 0;
+            document.getElementById('skewYInput').value = 0;
+        }
+        function showSection(id) {
+            document.getElementById('textControls').classList.add('hidden');
+            document.getElementById('shapeControls').classList.add('hidden');
+            document.getElementById(id).classList.remove('hidden');
+        }
+        function updateObject(prop, val) {
+            const obj = canvas.getActiveObject();
+            if (!obj) return;
+            if (prop === 'fontFamily') checkFontDeleteButton(val);
+            
+            // Special handling for font change in vertical mode to ensure reflow
+            if (prop === 'fontFamily' || prop === 'fontSize') {
+                obj.set(prop, val);
+                if (obj.isVertical) {
+                    // Slight delay to allow font measure update
+                    setTimeout(() => applyVerticalTextLayout(obj, obj.rawText || obj.text, obj.height * obj.scaleY), 10);
+                }
+            } else {
+                obj.set(prop, val);
+            }
+            canvas.requestRenderAll();
+        }
+        document.getElementById('globalScaleInput').addEventListener('input', (e) => { const obj = canvas.getActiveObject(); if(obj) { obj.scale(parseFloat(e.target.value)); document.getElementById('scaleValueDisplay').innerText = parseFloat(e.target.value).toFixed(1) + 'x'; canvas.requestRenderAll(); }});
+        
+        // --- Skew Logic ---
+        document.getElementById('skewXInput').addEventListener('input', (e) => {
+            const obj = canvas.getActiveObject();
+            if(!obj) return;
+            obj.set('skewX', parseFloat(e.target.value));
+            canvas.requestRenderAll();
+        });
+        document.getElementById('skewYInput').addEventListener('input', (e) => {
+            const obj = canvas.getActiveObject();
+            if(!obj) return;
+            obj.set('skewY', parseFloat(e.target.value));
+            canvas.requestRenderAll();
+        });
+        function resetSkew() {
+            const obj = canvas.getActiveObject();
+            if(!obj) return;
+            obj.set('skewX', 0);
+            obj.set('skewY', 0);
+            document.getElementById('skewXInput').value = 0;
+            document.getElementById('skewYInput').value = 0;
+            canvas.requestRenderAll();
+        }
+
+        document.getElementById('verticalTextToggle').addEventListener('change', (e) => { 
+            const obj = canvas.getActiveObject(); 
+            if(obj) {
+                obj.isVertical = e.target.checked;
+                applyText(obj, document.getElementById('textInput').value, e.target.checked); 
+            }
+        });
+        
+        document.getElementById('textInput').addEventListener('input', (e) => { 
+            const obj = canvas.getActiveObject(); 
+            if(obj) {
+                // Save raw text immediately
+                obj.rawText = e.target.value;
+                applyText(obj, e.target.value, document.getElementById('verticalTextToggle').checked); 
+            }
+        });
+
+        // Updated Logic for Text Application
+        function applyText(obj, text, isVertical) {
+            obj.rawText = text; // Always store raw
+            
+            if (isVertical) {
+                // Vertical Layout Logic
+                const currentHeight = obj.height * obj.scaleY; // Use current visual height as constraint
+                applyVerticalTextLayout(obj, text, currentHeight);
+                obj.set('textAlign', 'center'); // Usually center looks best for columns in bubbles
+            } else {
+                // Standard Horizontal
+                obj.set('text', text);
+                obj.set('textAlign', 'left');
+            }
+            canvas.renderAll();
+        }
+
+        function applyVerticalTextLayout(obj, text, boxHeight) {
+            if (!text) return;
+            
+            // Calculate font metrics
+            // We use a rough estimate or Fabric's line height
+            const fontSize = obj.fontSize;
+            const lineHeightMult = obj.lineHeight || 1.2;
+            const charHeight = fontSize * lineHeightMult;
+            
+            // Determine max characters per vertical column
+            // Ensure at least 1 char per col
+            let maxCharsPerCol = Math.floor(boxHeight / charHeight);
+            if (maxCharsPerCol < 1) maxCharsPerCol = 1;
+
+            // Split raw text into chunks (Columns)
+            // Note: We need to handle standard newlines in input carefully.
+            // If user typed Enter, they probably want a column break?
+            // For auto-wrap, we treat the whole string as a stream, but explicit newlines should force break.
+            
+            // Simplified approach: Treat strictly as stream for "Auto-wrap"
+            // Or: Respect user newlines + Auto-wrap
+            
+            let columns = [];
+            // Pre-split by user newlines first
+            const userParagraphs = text.split('\n');
+            
+            userParagraphs.forEach(para => {
+                if (para === '') {
+                    columns.push(''); // Empty line/col
+                    return;
+                }
+                let tempStr = para;
+                while (tempStr.length > 0) {
+                    columns.push(tempStr.substring(0, maxCharsPerCol));
+                    tempStr = tempStr.substring(maxCharsPerCol);
+                }
+            });
+
+            // Transpose to Visual Rows
+            // We want columns to be read Right-to-Left.
+            // Fabric Textbox renders lines Top-Down.
+            // Visual Line 1: [Col N Char 1]   [Col N-1 Char 1] ... [Col 1 Char 1]
+            
+            const numCols = columns.length;
+            // Find max depth (should be maxCharsPerCol usually)
+            let maxDepth = 0;
+            columns.forEach(c => maxDepth = Math.max(maxDepth, c.length));
+            
+            let visualText = "";
+            
+            for (let r = 0; r < maxDepth; r++) {
+                let lineStr = "";
+                // Iterate columns backwards (Right to Left)
+                for (let c = numCols - 1; c >= 0; c--) {
+                    const char = columns[c][r] || '　'; // Full-width space for alignment
+                    
+                    // Simple Bracket Rotation Mapping (Horizontal to Vertical)
+                    const mappedChar = mapVerticalChar(char);
+                    
+                    lineStr += mappedChar;
+                    if (c > 0) lineStr += " "; // Add gap between columns
+                }
+                if (r < maxDepth - 1) visualText += lineStr + "\n";
+                else visualText += lineStr;
+            }
+            
+            obj.set('text', visualText);
+        }
+
+        function mapVerticalChar(char) {
+            const map = {
+                '(': '︵', ')': '︶',
+                '[': '﹇', ']': '﹈',
+                '{': '︷', '}': '︸',
+                '「': '﹁', '」': '﹂',
+                '『': '﹃', '』': '﹄',
+                '—': '｜', '-': '｜', '…': '︙'
+            };
+            return map[char] || char;
+        }
+
+        document.getElementById('fontFamily').addEventListener('change', e => updateObject('fontFamily', e.target.value));
+        document.getElementById('textColor').addEventListener('input', e => { document.getElementById('textColorValue').innerText = e.target.value; updateObject('fill', e.target.value); });
+        document.getElementById('fontSize').addEventListener('input', e => updateObject('fontSize', parseInt(e.target.value)));
+        document.getElementById('fillColor').addEventListener('input', e => { document.getElementById('transparentFill').checked = false; updateObject('fill', e.target.value); });
+        document.getElementById('transparentFill').addEventListener('change', e => updateObject('fill', e.target.checked ? 'transparent' : document.getElementById('fillColor').value));
+        document.getElementById('strokeColor').addEventListener('input', e => updateObject('stroke', e.target.value));
+        document.getElementById('strokeWidthInput').addEventListener('input', e => updateObject('strokeWidth', parseInt(e.target.value)));
+        document.getElementById('opacityInput').addEventListener('input', e => updateObject('opacity', parseFloat(e.target.value)));
+
+        function saveCurrentAsPreset() {
+            const obj = canvas.getActiveObject();
+            if (!obj) return;
+            let preset = { id: Date.now() };
+            if (obj.type === 'i-text' || obj.type === 'text' || obj.type === 'textbox') {
+                preset.type = 'text';
+                // Save width and splitByGrapheme for textboxes
+                preset.style = { 
+                    fontFamily: obj.fontFamily, 
+                    fill: obj.fill, 
+                    fontSize: obj.fontSize,
+                    width: obj.width,
+                    splitByGrapheme: obj.splitByGrapheme,
+                    isVertical: obj.isVertical,
+                    rawText: obj.rawText,
+                    // Save skew
+                    skewX: obj.skewX,
+                    skewY: obj.skewY
+                };
+            } else if (obj.customType === 'image-bubble' && obj.src) {
+                try { preset.type = 'image-bubble'; preset.src = obj.src; } catch(e) { return alert('圖片過大'); }
+            } else {
+                preset.type = 'shape';
+                if (obj.type === 'ellipse') preset.shapeType = 'ellipse';
+                else if (obj.type === 'rect') preset.shapeType = 'rect';
+                else if (obj.path) preset.shapeType = obj.scaleX > 2 ? 'shout' : 'cloud'; 
+                else preset.shapeType = 'rect';
+                preset.style = { 
+                    fill: obj.fill, 
+                    stroke: obj.stroke, 
+                    strokeWidth: obj.strokeWidth,
+                    skewX: obj.skewX,
+                    skewY: obj.skewY 
+                };
+            }
+            try { presets.push(preset); localStorage.setItem('comic_presets', JSON.stringify(presets)); renderPresets(); } catch (e) { alert('儲存空間已滿'); presets.pop(); }
+        }
+        function loadPreset(preset) {
+            if (currentImageIndex === -1) return alert('請先上傳圖片');
+            if (preset.type === 'text') {
+                // Handle text preset specifically to use Textbox
+                const center = getVisualCenter();
+                const text = new fabric.Textbox(preset.style.rawText || '文字', {
+                    left: center.x, top: center.y,
+                    fontFamily: preset.style.fontFamily,
+                    fill: preset.style.fill,
+                    fontSize: preset.style.fontSize,
+                    lineHeight: 1.2,
+                    width: preset.style.width || 300,
+                    splitByGrapheme: preset.style.splitByGrapheme !== undefined ? preset.style.splitByGrapheme : true,
+                    rawText: preset.style.rawText || '文字',
+                    isVertical: preset.style.isVertical || false,
+                    skewX: preset.style.skewX || 0,
+                    skewY: preset.style.skewY || 0
+                });
+                
+                if (text.isVertical) {
+                    applyVerticalTextLayout(text, text.rawText, text.height * text.scaleY);
+                }
+                
+                canvas.add(text);
+                canvas.setActiveObject(text);
+            }
+            else if (preset.type === 'image-bubble') addCustomBubbleToCanvas(preset.src);
+            else addBubble(preset.shapeType || 'rect', preset.style);
+        }
+        function deletePreset(id, event) { event.stopPropagation(); presets = presets.filter(p => p.id !== id); localStorage.setItem('comic_presets', JSON.stringify(presets)); renderPresets(); }
+        function renderPresets() {
+            const container = document.getElementById('presetsList');
+            container.innerHTML = '';
+            if (presets.length === 0) { container.innerHTML = '<span class="text-xs text-gray-400 italic w-full text-center py-2">無</span>'; return; }
+            presets.forEach(p => {
+                const btn = document.createElement('div');
+                btn.className = 'preset-item relative w-8 h-8 rounded border border-gray-200 cursor-pointer flex items-center justify-center bg-white hover:border-blue-400 transition group overflow-hidden';
+                if (p.type === 'text') btn.innerHTML = `<span style="color:${p.style.fill}; font-family:${p.style.fontFamily}" class="text-xs font-bold">A</span>`;
+                else if (p.type === 'image-bubble') btn.innerHTML = `<img src="${p.src}" class="w-full h-full object-contain">`;
+                else { const bg = p.style.fill === 'transparent' ? 'transparent' : p.style.fill; btn.innerHTML = `<div style="width:12px; height:12px; background:${bg}; border: 2px solid ${p.style.stroke}; border-radius: 2px;"></div>`; }
+                const del = document.createElement('button');
+                del.className = 'delete-preset absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full text-white flex items-center justify-center opacity-0 transition-opacity hover:bg-red-600 z-10';
+                del.innerHTML = '<span style="font-size:8px; line-height:1">×</span>';
+                del.onclick = (e) => deletePreset(p.id, e);
+                btn.onclick = () => loadPreset(p);
+                btn.appendChild(del);
+                container.appendChild(btn);
+            });
+        }
+        function deleteActiveObject() { const obj = canvas.getActiveObject(); if(obj) { canvas.remove(obj); canvas.discardActiveObject(); renderPresets(); } }
+        function bringForward() { const obj = canvas.getActiveObject(); if(obj) canvas.bringForward(obj); }
+        function sendBackwards() { const obj = canvas.getActiveObject(); if(obj) canvas.sendBackwards(obj); }
+        function toggleSidebar() { const sidebar = document.getElementById('sidebar'); const overlay = document.getElementById('sidebarOverlay'); if (sidebar.classList.contains('-translate-x-full')) { sidebar.classList.remove('-translate-x-full'); overlay.classList.remove('hidden'); } else { sidebar.classList.add('-translate-x-full'); overlay.classList.add('hidden'); } }
+
+        window.onload = initCanvas;
+    </script>
+</body>
+</html>

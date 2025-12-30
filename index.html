@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My ToolHub - 個人工具箱</title>
+    
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 引入 Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        slate: {
+                            850: '#1e293b',
+                            900: '#0f172a',
+                            950: '#020617',
+                        }
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.3s ease-out',
+                        'slide-up': 'slideUp 0.4s ease-out',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' },
+                        },
+                        slideUp: {
+                            '0%': { opacity: '0', transform: 'translateY(10px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #020617;
+            color: #e2e8f0;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            overflow: hidden; /* 防止雙重滾動條 */
+        }
+        
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.4);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .tool-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .tool-card:hover {
+            transform: translateY(-4px);
+            background: rgba(30, 41, 59, 0.8);
+            border-color: rgba(59, 130, 246, 0.5);
+            box-shadow: 0 10px 40px -10px rgba(59, 130, 246, 0.15);
+        }
+
+        /* Iframe 容器樣式 */
+        #app-frame-container {
+            transition: transform 0.3s ease, opacity 0.3s ease;
+        }
+        #app-frame-container.hidden-app {
+            transform: translateX(100%);
+            opacity: 0;
+            pointer-events: none;
+            position: absolute;
+        }
+        #app-frame-container.active-app {
+            transform: translateX(0);
+            opacity: 1;
+            position: absolute;
+        }
+        
+        /* 儀表板容器樣式 */
+        #dashboard-container {
+            transition: transform 0.3s ease, opacity 0.3s ease;
+        }
+        #dashboard-container.hidden-dash {
+            transform: translateX(-20%);
+            opacity: 0;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="flex h-screen w-screen selection:bg-blue-500/30">
+
+    <!-- 側邊導航欄 -->
+    <aside id="sidebar" class="w-64 flex-shrink-0 bg-slate-900/80 border-r border-slate-800 flex flex-col transition-all duration-300 z-50 glass-panel">
+        
+        <!-- Header -->
+        <div class="h-16 flex items-center px-6 border-b border-slate-800/50 gap-3">
+            <div class="bg-blue-600 p-1.5 rounded-lg shadow-lg shadow-blue-500/20">
+                <i data-lucide="box" class="w-5 h-5 text-white"></i>
+            </div>
+            <h1 class="font-bold text-lg tracking-wide bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent truncate sidebar-text">
+                ToolHub
+            </h1>
+        </div>
+
+        <!-- Navigation -->
+        <div class="flex-1 overflow-y-auto py-4 px-3 space-y-1">
+            <button onclick="goHome()" id="nav-home" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium bg-blue-600/10 text-blue-400 border border-blue-500/20 transition-all cursor-pointer">
+                <i data-lucide="layout-grid" class="w-5 h-5"></i>
+                <span class="sidebar-text">工具總覽</span>
+            </button>
+
+            <div class="pt-4 pb-2 px-3 text-xs font-bold text-slate-500 uppercase tracking-wider sidebar-text select-none">
+                快速啟動
+            </div>
+            <div id="quick-launch-list" class="space-y-1">
+                <!-- JS 填充 -->
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="p-4 border-t border-slate-800/50">
+            <a href="https://github.com" target="_blank" class="flex items-center gap-3 text-slate-400 hover:text-white transition-colors group">
+                <i data-lucide="github" class="w-5 h-5 transition-transform group-hover:scale-110"></i>
+                <span class="text-xs font-medium sidebar-text">GitHub Repo</span>
+            </a>
+        </div>
+    </aside>
+
+    <!-- 主內容區 -->
+    <main class="flex-1 relative overflow-hidden bg-slate-950">
+        
+        <!-- 背景裝飾 -->
+        <div class="absolute inset-0 overflow-hidden pointer-events-none">
+            <div class="absolute -top-[20%] -right-[10%] w-[50%] h-[50%] bg-blue-900/10 rounded-full blur-[100px]"></div>
+            <div class="absolute top-[40%] -left-[10%] w-[40%] h-[40%] bg-indigo-900/10 rounded-full blur-[100px]"></div>
+        </div>
+
+        <!-- 1. 儀表板視圖 (Dashboard View) -->
+        <div id="dashboard-container" class="absolute inset-0 flex flex-col p-8 overflow-y-auto z-10 custom-scrollbar">
+            
+            <!-- 頂部搜尋與過濾 -->
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 animate-fade-in">
+                <div>
+                    <h2 class="text-2xl font-bold text-white mb-1">歡迎回來</h2>
+                    <p class="text-slate-400 text-sm">選擇一個工具開始工作，或將新工具加入列表。</p>
+                </div>
+                
+                <div class="flex items-center gap-3 bg-slate-900/50 p-1 rounded-xl border border-slate-800">
+                    <div class="relative group">
+                        <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-blue-400 transition-colors"></i>
+                        <input type="text" id="search-input" placeholder="搜尋工具..." 
+                            class="bg-transparent border-none text-sm text-slate-200 pl-9 pr-4 py-2 w-48 md:w-64 focus:outline-none placeholder:text-slate-600">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 分類標籤 -->
+            <div class="flex gap-2 mb-6 overflow-x-auto pb-2 animate-fade-in" style="animation-delay: 0.1s">
+                <button onclick="filterTools('all')" class="filter-btn active px-4 py-1.5 rounded-full text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 hover:text-white transition-all data-[active=true]:bg-blue-600 data-[active=true]:text-white data-[active=true]:border-blue-500">
+                    全部
+                </button>
+                <button onclick="filterTools('Image')" class="filter-btn px-4 py-1.5 rounded-full text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 hover:text-white transition-all">
+                    影像處理 (Image)
+                </button>
+                <button onclick="filterTools('Creative')" class="filter-btn px-4 py-1.5 rounded-full text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 hover:text-white transition-all">
+                    創意設計 (Creative)
+                </button>
+                <button onclick="filterTools('AI')" class="filter-btn px-4 py-1.5 rounded-full text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 hover:text-white transition-all">
+                    AI 工具 (AI)
+                </button>
+            </div>
+
+            <!-- 工具網格 -->
+            <div id="tools-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-10">
+                <!-- JS 生成卡片 -->
+            </div>
+
+            <!-- 空狀態提示 -->
+            <div id="empty-state" class="hidden flex-col items-center justify-center py-20 text-slate-500">
+                <i data-lucide="ghost" class="w-12 h-12 mb-4 opacity-50"></i>
+                <p>找不到符合的工具</p>
+            </div>
+            
+        </div>
+
+        <!-- 2. 應用程式視圖 (Iframe Container) -->
+        <div id="app-frame-container" class="absolute inset-0 bg-white z-20 hidden-app flex flex-col">
+            <!-- App Toolbar -->
+            <div class="h-10 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-4 flex-shrink-0">
+                <div class="flex items-center gap-3">
+                    <button onclick="goHome()" class="text-slate-400 hover:text-white flex items-center gap-1 text-xs font-medium transition-colors">
+                        <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
+                        返回
+                    </button>
+                    <div class="h-4 w-px bg-slate-700"></div>
+                    <span id="active-app-title" class="text-sm font-bold text-slate-200 flex items-center gap-2">
+                        <!-- App Icon & Title -->
+                    </span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="reloadApp()" class="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors" title="重新整理">
+                        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                    </button>
+                    <button onclick="openInNewTab()" class="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors" title="在新分頁開啟">
+                        <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- The Iframe -->
+            <iframe id="app-iframe" class="flex-1 w-full h-full border-none bg-slate-900" sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-modals allow-popups"></iframe>
+        </div>
+
+    </main>
+
+    <!-- JAVASCRIPT CONFIGURATION -->
+    <script>
+        // ============================================
+        // 🔧 設定區域：在此處新增或修改你的工具
+        // ============================================
+        const toolsConfig = [
+            {
+                id: 'renamer',
+                title: 'Visual Renamer',
+                description: '視覺化批次圖片重新命名工具，支援拖曳排序、格式轉換與 Exif 清除。',
+                file: 'Rename.html',  // 你的 HTML 檔名
+                icon: 'image',        // Lucide Icon 名稱
+                color: 'text-blue-400',
+                bg: 'bg-blue-500/10',
+                category: 'Image',
+                tags: ['Utility', 'Batch']
+            },
+            {
+                id: 'typesetter',
+                title: '漫畫嵌字神器 Pro(未完成)',
+                description: '基於 Canvas 的線上嵌字工具，支援自訂字型上傳、對話框編輯與專案導出。',
+                file: 'TextWeb.html', // 你的 HTML 檔名
+                icon: 'type',
+                color: 'text-purple-400',
+                bg: 'bg-purple-500/10',
+                category: 'Creative',
+                tags: ['Editor', 'Design']
+            },
+            {
+                id: 'comfyui',
+                title: 'ComfyUI Tag Extractor',
+                description: '讀取 ComfyUI 生成的 PNG 圖片，快速分析 Prompt、Model、Seed 與 Workflow 資訊。',
+                file: 'ComfyUI Tag Extractor.html', // 你的 HTML 檔名
+                icon: 'cpu',
+                color: 'text-green-400',
+                bg: 'bg-green-500/10',
+                category: 'AI',
+                tags: ['Metadata', 'Analysis']
+            }
+        ];
+
+        // ============================================
+        // 邏輯程式碼
+        // ============================================
+
+        // 狀態變數
+        let currentFilter = 'all';
+        let searchQuery = '';
+        let activeToolId = null;
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            renderTools();
+            renderQuickLaunch();
+            
+            // 確保圖標渲染
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+
+            // 搜尋監聽
+            const searchInput = document.getElementById('search-input');
+            if (searchInput) {
+                searchInput.addEventListener('input', (e) => {
+                    searchQuery = e.target.value.toLowerCase();
+                    renderTools();
+                });
+            }
+        });
+
+        // 渲染工具卡片 (儀表板)
+        function renderTools() {
+            const container = document.getElementById('tools-grid');
+            const emptyState = document.getElementById('empty-state');
+            if (!container) return;
+            
+            container.innerHTML = '';
+
+            const filtered = toolsConfig.filter(tool => {
+                const matchesCategory = currentFilter === 'all' || tool.category === currentFilter;
+                const matchesSearch = tool.title.toLowerCase().includes(searchQuery) || 
+                                      tool.description.toLowerCase().includes(searchQuery) ||
+                                      tool.tags.some(t => t.toLowerCase().includes(searchQuery));
+                return matchesCategory && matchesSearch;
+            });
+
+            if (filtered.length === 0) {
+                emptyState.classList.remove('hidden');
+                emptyState.classList.add('flex');
+            } else {
+                emptyState.classList.add('hidden');
+                emptyState.classList.remove('flex');
+            }
+
+            filtered.forEach((tool, index) => {
+                const delay = index * 0.05;
+                const card = document.createElement('div');
+                card.className = `tool-card glass-panel rounded-xl p-5 flex flex-col gap-4 cursor-pointer group border border-slate-700/50 animate-slide-up`;
+                card.style.animationDelay = `${delay}s`;
+                // 綁定點擊事件
+                card.onclick = function() { launchApp(tool.id); };
+
+                card.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <div class="p-3 rounded-lg ${tool.bg} border border-white/5">
+                            <i data-lucide="${tool.icon}" class="w-6 h-6 ${tool.color}"></i>
+                        </div>
+                        <button class="opacity-0 group-hover:opacity-100 transition-opacity p-2 text-slate-400 hover:text-white" title="在新分頁開啟" onclick="event.stopPropagation(); window.open('${tool.file}', '_blank')">
+                            <i data-lucide="external-link" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                    
+                    <div>
+                        <h3 class="font-bold text-lg text-slate-100 group-hover:text-blue-300 transition-colors mb-1">${tool.title}</h3>
+                        <p class="text-sm text-slate-400 line-clamp-2 leading-relaxed">${tool.description}</p>
+                    </div>
+
+                    <div class="mt-auto pt-4 border-t border-slate-700/50 flex justify-between items-center">
+                        <div class="flex gap-2">
+                            ${tool.tags.map(tag => `<span class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">${tag}</span>`).join('')}
+                        </div>
+                        <span class="text-xs font-medium text-blue-500 opacity-0 group-hover:opacity-100 transition-all transform translate-x-[-10px] group-hover:translate-x-0 flex items-center gap-1">
+                            啟動 <i data-lucide="arrow-right" class="w-3 h-3"></i>
+                        </span>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+            
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        // 渲染側邊欄快速啟動 (修正版)
+        function renderQuickLaunch() {
+            const list = document.getElementById('quick-launch-list');
+            if (!list) return;
+            
+            list.innerHTML = '';
+            
+            toolsConfig.forEach(tool => {
+                const btn = document.createElement('button');
+                btn.className = `w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-all group cursor-pointer select-none`;
+                
+                // 直接綁定函數，避免作用域問題
+                btn.onclick = function() { 
+                    launchApp(tool.id); 
+                };
+
+                btn.innerHTML = `
+                    <i data-lucide="${tool.icon}" class="w-4 h-4 ${tool.color} opacity-70 group-hover:opacity-100 pointer-events-none"></i>
+                    <span class="truncate sidebar-text pointer-events-none">${tool.title}</span>
+                `;
+                list.appendChild(btn);
+            });
+            
+            // 重新渲染新加入的圖標
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        // 過濾功能
+        function filterTools(category) {
+            currentFilter = category;
+            
+            // 更新按鈕樣式
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                if (btn.getAttribute('onclick').includes(`'${category}'`)) {
+                    btn.setAttribute('data-active', 'true');
+                    btn.classList.add('bg-blue-600', 'text-white', 'border-blue-500');
+                    btn.classList.remove('bg-slate-800', 'text-slate-300', 'border-slate-700');
+                } else {
+                    btn.removeAttribute('data-active');
+                    btn.classList.remove('bg-blue-600', 'text-white', 'border-blue-500');
+                    btn.classList.add('bg-slate-800', 'text-slate-300', 'border-slate-700');
+                }
+            });
+
+            renderTools();
+        }
+
+        // 啟動 App (核心邏輯)
+        function launchApp(id) {
+            const tool = toolsConfig.find(t => t.id === id);
+            if (!tool) {
+                console.error('Tool not found:', id);
+                return;
+            }
+
+            activeToolId = id;
+
+            // UI 元素
+            const dashboard = document.getElementById('dashboard-container');
+            const appFrame = document.getElementById('app-frame-container');
+            const iframe = document.getElementById('app-iframe');
+            const sidebar = document.getElementById('sidebar');
+            const activeTitle = document.getElementById('active-app-title');
+
+            // 1. 設定標題與 Icon
+            activeTitle.innerHTML = `<i data-lucide="${tool.icon}" class="w-4 h-4 ${tool.color}"></i> ${tool.title}`;
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+
+            // 2. 載入 Iframe
+            iframe.src = tool.file;
+
+            // 3. 執行轉場
+            dashboard.classList.add('hidden-dash');
+            appFrame.classList.remove('hidden-app');
+            appFrame.classList.add('active-app');
+            
+            // 4. 收縮側邊欄
+            sidebar.classList.add('w-16');
+            sidebar.classList.remove('w-64');
+            
+            // 隱藏文字
+            const texts = document.querySelectorAll('.sidebar-text');
+            texts.forEach(el => el.classList.add('hidden'));
+
+            // 更新選單狀態
+            const homeBtn = document.getElementById('nav-home');
+            homeBtn.classList.remove('bg-blue-600/10', 'text-blue-400');
+            homeBtn.classList.add('text-slate-400', 'hover:text-white');
+        }
+
+        // 返回主頁
+        function goHome() {
+            const dashboard = document.getElementById('dashboard-container');
+            const appFrame = document.getElementById('app-frame-container');
+            const iframe = document.getElementById('app-iframe');
+            const sidebar = document.getElementById('sidebar');
+            const homeBtn = document.getElementById('nav-home');
+
+            dashboard.classList.remove('hidden-dash');
+            appFrame.classList.add('hidden-app');
+            appFrame.classList.remove('active-app');
+
+            // 延遲清空 iframe
+            setTimeout(() => {
+                iframe.src = 'about:blank';
+                activeToolId = null;
+            }, 300);
+
+            // 展開側邊欄
+            sidebar.classList.remove('w-16');
+            sidebar.classList.add('w-64');
+            
+            // 顯示文字 (延遲以配合動畫)
+            setTimeout(() => {
+                const texts = document.querySelectorAll('.sidebar-text');
+                texts.forEach(el => el.classList.remove('hidden'));
+            }, 100);
+
+            homeBtn.classList.add('bg-blue-600/10', 'text-blue-400');
+            homeBtn.classList.remove('text-slate-400', 'hover:text-white');
+        }
+
+        function reloadApp() {
+            if(activeToolId) {
+                const iframe = document.getElementById('app-iframe');
+                iframe.contentWindow.location.reload();
+            }
+        }
+
+        function openInNewTab() {
+            if(activeToolId) {
+                const tool = toolsConfig.find(t => t.id === activeToolId);
+                if(tool) window.open(tool.file, '_blank');
+            }
+        }
+
+        // 將函數掛載到 Window 以供 HTML onclick 使用
+        window.filterTools = filterTools;
+        window.launchApp = launchApp;
+        window.goHome = goHome;
+        window.reloadApp = reloadApp;
+        window.openInNewTab = openInNewTab;
+
+    </script>
+</body>
+</html>

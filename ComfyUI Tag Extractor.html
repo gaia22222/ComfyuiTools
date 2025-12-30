@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ComfyUI Tag & Info Extractor (Enhanced)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <style>
+        /* 自定義滾動條樣式 */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #111827; 
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #374151; 
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #4b5563; 
+        }
+        /* 隱藏數字輸入框的箭頭 */
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+            -webkit-appearance: none; 
+            margin: 0; 
+        }
+        .glass-panel {
+            background: rgba(31, 41, 55, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(75, 85, 99, 0.4);
+        }
+    </style>
+</head>
+<body class="bg-gray-950 text-gray-100 font-sans selection:bg-blue-500/30">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useCallback, useEffect, useMemo } = React;
+
+        // --- 簡易圖示組件 (SVG) ---
+        const IconWrapper = ({ path, className, title, onClick }) => (
+            <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                width="24" height="24" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor" 
+                strokeWidth="2" 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                className={className}
+                onClick={onClick}
+            >
+                {title && <title>{title}</title>}
+                {path}
+            </svg>
+        );
+
+        const Icons = {
+            Upload: <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>,
+            FileText: <><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></>,
+            Code: <><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></>,
+            Check: <polyline points="20 6 9 17 4 12"/>,
+            Copy: <><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></>,
+            ImageIcon: <><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></>,
+            AlertCircle: <><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></>,
+            Terminal: <><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></>,
+            Grid: <><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></>,
+            List: <><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></>,
+            Trash2: <><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></>,
+            Plus: <><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>,
+            ArrowDownAZ: <><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M20 8h-5"/><path d="M15 10v6.5a2.5 2.5 0 0 0 5 0V4"/></>,
+            Settings: <><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.39a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></>,
+            Cpu: <><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></>,
+            Layers: <><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></>,
+            Hash: <><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></>,
+            Maximize: <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>,
+            X: <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>
+        };
+
+        const Icon = ({ name, className, title, onClick }) => (
+            <IconWrapper 
+                path={Icons[name] || <circle cx="12" cy="12" r="10"/>} 
+                className={className} 
+                title={title}
+                onClick={onClick}
+            />
+        );
+
+        // --- UI Components ---
+
+        const Card = ({ children, className = "" }) => (
+          <div className={`glass-panel rounded-xl overflow-hidden shadow-lg ${className}`}>
+            {children}
+          </div>
+        );
+
+        const Button = ({ children, onClick, variant = "primary", className = "", disabled = false, title = "" }) => {
+          const baseStyle = "px-4 py-2 rounded-lg font-medium transition-all flex items-center justify-center gap-2 active:scale-95";
+          const variants = {
+            primary: "bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/20 shadow-lg border border-blue-500/50",
+            secondary: "bg-gray-700 hover:bg-gray-600 text-gray-200 border border-gray-600",
+            ghost: "bg-transparent hover:bg-gray-700/50 text-gray-400 hover:text-white",
+            danger: "bg-red-900/30 hover:bg-red-900/50 text-red-200 border border-red-800",
+            icon: "p-2 hover:bg-gray-700 text-gray-400 hover:text-white rounded-full aspect-square"
+          };
+          return (
+            <button 
+              onClick={onClick} 
+              disabled={disabled}
+              title={title}
+              className={`${baseStyle} ${variants[variant] || variants.primary} ${className} ${disabled ? 'opacity-50 cursor-not-allowed active:scale-100' : ''}`}
+            >
+              {children}
+            </button>
+          );
+        };
+
+        const Badge = ({ children, color = "gray", className = "" }) => {
+            const colors = {
+                gray: "bg-gray-700/50 text-gray-300 border-gray-600",
+                blue: "bg-blue-900/30 text-blue-300 border-blue-800",
+                green: "bg-green-900/30 text-green-300 border-green-800",
+                purple: "bg-purple-900/30 text-purple-300 border-purple-800",
+                red: "bg-red-900/30 text-red-300 border-red-800",
+                yellow: "bg-yellow-900/30 text-yellow-300 border-yellow-800",
+            };
+            return (
+                <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider border ${colors[color]} ${className}`}>
+                    {children}
+                </span>
+            );
+        };
+
+        // --- Helper Functions ---
+
+        const cleanJsonString = (str) => {
+          if (typeof str !== 'string') return str;
+          return str
+            .replace(/:\s*NaN\b/g, ': null')
+            .replace(/\[\s*NaN\b/g, '[null')
+            .replace(/,\s*NaN\b/g, ', null')
+            .replace(/:\s*Infinity\b/g, ': null')
+            .replace(/\[\s*Infinity\b/g, '[null')
+            .replace(/,\s*Infinity\b/g, ', null')
+            .replace(/:\s*-Infinity\b/g, ': null')
+            .replace(/\[\s*-Infinity\b/g, '[null')
+            .replace(/,\s*-Infinity\b/g, ', null');
+        };
+
+        const safeJsonParse = (str) => {
+          try {
+            return JSON.parse(str);
+          } catch (e) {
+            try {
+              const cleaned = cleanJsonString(str);
+              return JSON.parse(cleaned);
+            } catch (e2) {
+              console.error("JSON Parse failed even after cleaning:", e2);
+              return null;
+            }
+          }
+        };
+
+        const extractPngMetadata = async (file) => {
+          return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              try {
+                const buffer = event.target.result;
+                const dataView = new DataView(buffer);
+                const textData = {};
+                
+                if (dataView.getUint32(0) !== 0x89504E47) {
+                  reject("無效的 PNG 文件");
+                  return;
+                }
+
+                let offset = 8;
+                while (offset < buffer.byteLength) {
+                  const length = dataView.getUint32(offset);
+                  const type = String.fromCharCode(
+                    dataView.getUint8(offset + 4),
+                    dataView.getUint8(offset + 5),
+                    dataView.getUint8(offset + 6),
+                    dataView.getUint8(offset + 7)
+                  );
+
+                  if (type === 'tEXt') {
+                    let keywordEnd = offset + 8;
+                    while (dataView.getUint8(keywordEnd) !== 0) keywordEnd++;
+                    const decoder = new TextDecoder();
+                    const keyword = decoder.decode(buffer.slice(offset + 8, keywordEnd));
+                    const content = decoder.decode(buffer.slice(keywordEnd + 1, offset + 8 + length));
+                    textData[keyword] = content;
+                  }
+                  offset += length + 12;
+                }
+                resolve(textData);
+              } catch (e) {
+                reject("解析失敗");
+              }
+            };
+            reader.onerror = () => reject("讀取失敗");
+            reader.readAsArrayBuffer(file);
+          });
+        };
+
+        const analyzePrompts = (promptData, workflowData) => {
+          const results = [];
+          
+          if (!promptData) {
+            if (!workflowData || !workflowData.nodes) return [];
+            
+            // Fallback: Check workflow nodes
+            workflowData.nodes.forEach(node => {
+              const nodeType = node.type || '';
+              const nodeTitle = node.title || '';
+              
+              if (nodeType === 'CLIPTextEncode' || 
+                  nodeType === 'CLIPTextEncodeSDXL' ||
+                  nodeType.includes('RandomPrompt') ||
+                  nodeType.includes('Wildcard') ||
+                  nodeType === 'DPRandomGenerator' ||
+                  nodeTitle.includes('Prompt') ||
+                  nodeType === 'ShowText' ||
+                  nodeType === 'PrimitiveNode' // Sometimes contains strings
+                 ) {
+                  const textWidget = node.widgets_values?.[0];
+                  if (typeof textWidget === 'string' && textWidget.trim().length > 0) {
+                      results.push({
+                          id: node.id,
+                          title: `${nodeType}`,
+                          content: textWidget,
+                          type: 'unknown'
+                      });
+                  }
+              }
+            });
+          } else {
+            // Standard Prompt format
+            Object.entries(promptData).forEach(([id, node]) => {
+              const classType = node.class_type || '';
+              const metaTitle = node._meta?.title || '';
+              
+              if (classType === 'CLIPTextEncode' || 
+                  classType === 'CLIPTextEncodeSDXL' ||
+                  classType.includes('RandomPrompt') || 
+                  classType.includes('Wildcard') ||
+                  classType.includes('Prompt') ||
+                  classType === 'DPRandomGenerator' || 
+                  classType === 'ShowText' ||
+                  metaTitle.includes('Prompt')
+              ) {
+                const inputs = node.inputs || {};
+                const text = inputs.text || inputs.text_g || inputs.text_l || inputs.string || inputs.prompt || inputs.wildcard;
+                
+                if (typeof text === 'string' && text.trim().length > 0) {
+                  results.push({
+                    id,
+                    title: `${metaTitle || classType}`,
+                    content: text,
+                    type: 'unknown' 
+                  });
+                }
+              }
+            });
+          }
+
+          // Categorize
+          const categorized = results.map(item => {
+            const lower = item.content.toLowerCase();
+            const isNegative = lower.includes('low quality') || lower.includes('worst quality') || lower.includes('nsfw') || lower.includes('bad anatomy') || lower.includes('embedding:') || item.title.toLowerCase().includes('negative');
+            
+            if (isNegative) {
+              return { ...item, type: 'negative', title: `Negative` };
+            }
+            return { ...item, type: 'positive', title: `Positive` };
+          });
+
+          // Sort: Positive first, then negative, then others
+          categorized.sort((a, b) => {
+            const order = { 'positive': 1, 'negative': 2, 'unknown': 3 };
+            return (order[a.type] || 3) - (order[b.type] || 3);
+          });
+
+          return categorized;
+        };
+
+        // NEW: Extract Generation Parameters (Seed, Model, Sampler, etc.)
+        const extractGenInfo = (promptData) => {
+            const info = {
+                seed: null,
+                steps: null,
+                cfg: null,
+                sampler: null,
+                scheduler: null,
+                model: null,
+                loras: []
+            };
+
+            if (!promptData) return info;
+
+            // Iterate all nodes
+            Object.values(promptData).forEach(node => {
+                const type = node.class_type;
+                const inputs = node.inputs;
+                if (!inputs) return;
+
+                // KSampler (Standard, Advanced, Custom)
+                if (type.includes('KSampler')) {
+                    // Try to grab values if they exist
+                    if (inputs.seed !== undefined) info.seed = inputs.seed;
+                    if (inputs.noise_seed !== undefined) info.seed = inputs.noise_seed;
+                    if (inputs.steps !== undefined) info.steps = inputs.steps;
+                    if (inputs.cfg !== undefined) info.cfg = inputs.cfg;
+                    if (inputs.sampler_name !== undefined) info.sampler = inputs.sampler_name;
+                    if (inputs.scheduler !== undefined) info.scheduler = inputs.scheduler;
+                }
+
+                // Checkpoint Loader
+                if (type.includes('CheckpointLoader')) {
+                    info.model = inputs.ckpt_name;
+                }
+
+                // LoRA Loader
+                if (type.includes('LoraLoader')) {
+                    if (inputs.lora_name) {
+                        info.loras.push({ 
+                            name: inputs.lora_name, 
+                            strength: inputs.strength_model !== undefined ? inputs.strength_model : 1.0 
+                        });
+                    }
+                }
+            });
+            
+            // Dedupe LoRAs just in case
+            info.loras = [...new Set(info.loras.map(JSON.stringify))].map(JSON.parse);
+
+            return info;
+        };
+
+
+        // --- Main Component ---
+
+        function ComfyUIExtractor() {
+          const [filesData, setFilesData] = useState([]); 
+          const [selectedIndex, setSelectedIndex] = useState(0);
+          const [viewMode, setViewMode] = useState('single'); 
+          const [copyStatus, setCopyStatus] = useState({});
+          const [isProcessing, setIsProcessing] = useState(false);
+          const [optimizeExport, setOptimizeExport] = useState(false); 
+          const [lightboxImage, setLightboxImage] = useState(null);
+
+          useEffect(() => {
+            return () => {
+              filesData.forEach(item => {
+                if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+              });
+            };
+          }, []);
+
+          const processFiles = async (newFiles) => {
+            setIsProcessing(true);
+            const processed = await Promise.all(Array.from(newFiles).map(async (file) => {
+              const fileId = Math.random().toString(36).substr(2, 9);
+              let previewUrl = null;
+              let metadata = { prompt: null, workflow: null };
+              let prompts = [];
+              let genInfo = {};
+              let error = null;
+
+              try {
+                previewUrl = URL.createObjectURL(file);
+                
+                if (file.type !== 'image/png') {
+                   if (file.type === 'image/jpeg') {
+                      error = "JPG 格式可能不包含 Workflow 數據";
+                   } else {
+                      error = "不支援的格式";
+                   }
+                }
+
+                if (file.type === 'image/png' || file.type === 'image/jpeg') {
+                    try {
+                        const rawData = await extractPngMetadata(file);
+                        if (rawData['prompt']) metadata.prompt = safeJsonParse(rawData['prompt']);
+                        if (rawData['workflow']) metadata.workflow = safeJsonParse(rawData['workflow']);
+                        
+                        if (!metadata.prompt && !metadata.workflow) {
+                            error = "未找到 ComfyUI 元數據";
+                        } else {
+                            prompts = analyzePrompts(metadata.prompt, metadata.workflow);
+                            genInfo = extractGenInfo(metadata.prompt);
+                        }
+                    } catch (err) {
+                        if (!error) error = "無法讀取元數據";
+                    }
+                }
+
+              } catch (e) {
+                error = e.message;
+              }
+
+              return {
+                id: fileId,
+                file,
+                name: file.name,
+                previewUrl,
+                metadata,
+                prompts,
+                genInfo,
+                error
+              };
+            }));
+
+            setFilesData(prev => {
+              const combined = [...prev, ...processed];
+              return combined.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+            });
+            setIsProcessing(false);
+          };
+
+          const handleDrop = useCallback((e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const droppedFiles = e.dataTransfer?.files || e.target?.files;
+            if (droppedFiles && droppedFiles.length > 0) {
+              processFiles(droppedFiles);
+            }
+          }, []);
+
+          const copyToClipboard = (text, id) => {
+            if (!text) return;
+            navigator.clipboard.writeText(String(text)).then(() => {
+              setCopyStatus({ ...copyStatus, [id]: true });
+              setTimeout(() => {
+                setCopyStatus(prev => ({ ...prev, [id]: false }));
+              }, 2000);
+            });
+          };
+
+          const clearAll = () => {
+            filesData.forEach(item => URL.revokeObjectURL(item.previewUrl));
+            setFilesData([]);
+            setSelectedIndex(0);
+          };
+
+          const removeFile = (e, indexToRemove) => {
+            e.stopPropagation();
+            URL.revokeObjectURL(filesData[indexToRemove].previewUrl);
+            setFilesData(prev => prev.filter((_, idx) => idx !== indexToRemove));
+            if (selectedIndex >= indexToRemove && selectedIndex > 0) {
+              setSelectedIndex(prev => prev - 1);
+            }
+          };
+
+          const Lightbox = () => {
+             if (!lightboxImage) return null;
+             return (
+                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4" onClick={() => setLightboxImage(null)}>
+                    <img src={lightboxImage} className="max-w-full max-h-full object-contain shadow-2xl rounded" />
+                    <button className="absolute top-4 right-4 text-white hover:text-red-400 p-2">
+                        <Icon name="X" className="w-8 h-8" />
+                    </button>
+                 </div>
+             )
+          };
+
+          const SingleView = () => {
+            const currentItem = filesData[selectedIndex];
+            if (!currentItem) return <div className="p-20 text-center text-gray-500 flex flex-col items-center gap-4"><Icon name="ImageIcon" className="w-16 h-16 opacity-20"/>請選擇一張圖片</div>;
+
+            const [tab, setTab] = useState('simple');
+            const { genInfo } = currentItem;
+
+            return (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full p-1">
+                {/* Left Column: Image & Basic Info */}
+                <div className="lg:col-span-5 flex flex-col gap-4">
+                   <Card className="flex-1 bg-gray-900 border-gray-800 flex items-center justify-center relative group min-h-[300px]">
+                      <div className="absolute top-0 left-0 right-0 p-3 bg-gradient-to-b from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex justify-between items-start z-10">
+                         <span className="text-xs font-mono text-gray-200 truncate bg-black/50 px-2 py-1 rounded backdrop-blur-sm max-w-[80%]" title={currentItem.name}>
+                            {currentItem.name}
+                         </span>
+                         <button onClick={() => setLightboxImage(currentItem.previewUrl)} className="p-1.5 bg-black/50 hover:bg-black/80 rounded text-white backdrop-blur-sm">
+                            <Icon name="Maximize" className="w-4 h-4" />
+                         </button>
+                      </div>
+                      <img 
+                        src={currentItem.previewUrl} 
+                        className="max-w-full max-h-[80vh] object-contain cursor-pointer transition-transform duration-300" 
+                        alt={currentItem.name} 
+                        onClick={() => setLightboxImage(currentItem.previewUrl)}
+                      />
+                   </Card>
+
+                   {currentItem.error && (
+                     <div className="bg-red-900/20 border border-red-800 text-red-200 text-sm p-3 rounded flex items-center gap-2">
+                       <Icon name="AlertCircle" className="w-4 h-4" />
+                       {currentItem.error}
+                     </div>
+                   )}
+                </div>
+
+                {/* Right Column: Data */}
+                <div className="lg:col-span-7 flex flex-col gap-4 h-full overflow-hidden">
+                     
+                     {/* Generation Info Panel */}
+                     {!currentItem.error && (genInfo.model || genInfo.seed) && (
+                         <Card className="p-4 bg-gray-800/60 border-gray-700">
+                            <div className="flex items-center gap-2 mb-3 text-blue-400 font-bold text-sm uppercase tracking-wide">
+                                <Icon name="Cpu" className="w-4 h-4"/> Generation Info
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-y-4 gap-x-6 text-sm">
+                                {genInfo.model && (
+                                    <div className="col-span-2 md:col-span-4">
+                                        <div className="text-gray-500 text-[10px] uppercase">Model / Checkpoint</div>
+                                        <div className="font-mono text-white truncate flex items-center gap-2 group cursor-pointer" onClick={() => copyToClipboard(genInfo.model, 'model-cp')}>
+                                            {genInfo.model}
+                                            <Icon name={copyStatus['model-cp'] ? "Check" : "Copy"} className="w-3 h-3 text-gray-500 group-hover:text-blue-400" />
+                                        </div>
+                                    </div>
+                                )}
+                                {genInfo.loras.length > 0 && (
+                                    <div className="col-span-2 md:col-span-4">
+                                        <div className="text-gray-500 text-[10px] uppercase mb-1 flex items-center gap-1"><Icon name="Layers" className="w-3 h-3"/> LoRA</div>
+                                        <div className="flex flex-wrap gap-2">
+                                            {genInfo.loras.map((lora, idx) => (
+                                                <div key={idx} className="bg-purple-900/30 border border-purple-800/50 rounded px-2 py-1 text-xs text-purple-200 flex items-center gap-2">
+                                                    <span className="truncate max-w-[150px]">{lora.name}</span>
+                                                    <span className="opacity-50 text-[10px]">{Number(lora.strength).toFixed(1)}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                                {genInfo.seed && (
+                                    <div>
+                                        <div className="text-gray-500 text-[10px] uppercase">Seed</div>
+                                        <div className="font-mono text-green-400 cursor-pointer flex items-center gap-1 group" onClick={() => copyToClipboard(genInfo.seed, 'seed-cp')}>
+                                            {genInfo.seed}
+                                            <Icon name={copyStatus['seed-cp'] ? "Check" : "Copy"} className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                        </div>
+                                    </div>
+                                )}
+                                {genInfo.steps && (
+                                    <div>
+                                        <div className="text-gray-500 text-[10px] uppercase">Steps</div>
+                                        <div className="font-mono text-gray-200">{genInfo.steps}</div>
+                                    </div>
+                                )}
+                                {genInfo.cfg && (
+                                    <div>
+                                        <div className="text-gray-500 text-[10px] uppercase">CFG</div>
+                                        <div className="font-mono text-gray-200">{genInfo.cfg}</div>
+                                    </div>
+                                )}
+                                {genInfo.sampler && (
+                                    <div className="col-span-2 md:col-span-1">
+                                        <div className="text-gray-500 text-[10px] uppercase">Sampler</div>
+                                        <div className="font-mono text-gray-200 truncate" title={`${genInfo.sampler} / ${genInfo.scheduler}`}>
+                                            {genInfo.sampler} <span className="text-gray-600">/ {genInfo.scheduler}</span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                         </Card>
+                     )}
+
+                     {/* Tabs */}
+                     <div className="flex gap-1 border-b border-gray-700 pb-1">
+                        <button onClick={() => setTab('simple')} className={`px-4 py-2 text-sm font-medium rounded-t-lg flex items-center gap-2 transition-colors ${tab === 'simple' ? 'bg-gray-800 text-blue-400 border-t border-x border-gray-700' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/50'}`}>
+                          <Icon name="FileText" className="w-4 h-4" /> Prompts
+                        </button>
+                        <button onClick={() => setTab('raw')} className={`px-4 py-2 text-sm font-medium rounded-t-lg flex items-center gap-2 transition-colors ${tab === 'raw' ? 'bg-gray-800 text-purple-400 border-t border-x border-gray-700' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/50'}`}>
+                          <Icon name="Code" className="w-4 h-4" /> Raw JSON
+                        </button>
+                     </div>
+
+                     <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar bg-gray-900/30 rounded-b-lg p-2">
+                        {tab === 'simple' ? (
+                           <div className="space-y-3">
+                             {currentItem.prompts.length === 0 ? (
+                               <div className="text-center py-12 text-gray-600 border-2 border-dashed border-gray-800 rounded-lg">
+                                 無提取到任何 Prompt 數據
+                               </div>
+                             ) : (
+                               currentItem.prompts.map((p, idx) => (
+                                 <div key={idx} className="bg-gray-800 rounded-lg border border-gray-700 hover:border-gray-600 transition-colors group">
+                                    <div className="flex justify-between items-center p-2 border-b border-gray-700/50 bg-gray-900/40 rounded-t-lg">
+                                       <div className="flex items-center gap-2">
+                                           <Badge color={p.type === 'positive' ? 'green' : p.type === 'negative' ? 'red' : 'gray'}>
+                                               {p.title}
+                                           </Badge>
+                                           <span className="text-[10px] text-gray-600 font-mono">ID: {p.id}</span>
+                                       </div>
+                                       <button 
+                                            onClick={() => copyToClipboard(p.content, `s-${currentItem.id}-${idx}`)}
+                                            className="text-gray-500 hover:text-white p-1 rounded hover:bg-gray-700 transition-colors"
+                                            title="Copy Text"
+                                       >
+                                          {copyStatus[`s-${currentItem.id}-${idx}`] ? <Icon name="Check" className="w-4 h-4 text-green-400" /> : <Icon name="Copy" className="w-4 h-4" />}
+                                       </button>
+                                    </div>
+                                    <div className="p-3 text-sm text-gray-300 font-mono whitespace-pre-wrap break-words leading-relaxed selection:bg-blue-500/30">
+                                       {p.content}
+                                    </div>
+                                 </div>
+                               ))
+                             )}
+                           </div>
+                        ) : (
+                           <div className="space-y-6">
+                              <div className="space-y-2">
+                                <div className="flex justify-between text-xs text-gray-400 px-1">
+                                    <span className="font-bold">Prompt JSON (API Format)</span>
+                                    <button onClick={() => copyToClipboard(JSON.stringify(currentItem.metadata.prompt, null, 2), `rp-${currentItem.id}`)} className="text-blue-400 hover:text-blue-300">複製 JSON</button>
+                                </div>
+                                <pre className="p-4 text-xs text-green-400 font-mono bg-black/60 rounded-lg border border-gray-800 overflow-auto max-h-[400px] shadow-inner">
+                                    {JSON.stringify(currentItem.metadata.prompt, null, 2)}
+                                </pre>
+                              </div>
+                              <div className="space-y-2">
+                                <div className="flex justify-between text-xs text-gray-400 px-1">
+                                    <span className="font-bold">Workflow JSON (Graph Format)</span>
+                                    <button onClick={() => copyToClipboard(JSON.stringify(currentItem.metadata.workflow, null, 2), `rw-${currentItem.id}`)} className="text-yellow-400 hover:text-yellow-300">複製 JSON</button>
+                                </div>
+                                <pre className="p-4 text-xs text-yellow-500/80 font-mono bg-black/60 rounded-lg border border-gray-800 overflow-auto max-h-[400px] shadow-inner">
+                                    {JSON.stringify(currentItem.metadata.workflow, null, 2)}
+                                </pre>
+                              </div>
+                           </div>
+                        )}
+                     </div>
+                </div>
+              </div>
+            );
+          };
+
+          const BatchView = () => {
+              const generateBulkText = () => {
+                return filesData.flatMap(file => {
+                    if (file.prompts.length === 0) return [];
+                    const separator = "----------------------------------------";
+                    const header = `File: ${file.name}`;
+                    const params = file.genInfo.seed ? `Seed: ${file.genInfo.seed}, Model: ${file.genInfo.model}, Steps: ${file.genInfo.steps}` : "";
+                    
+                    const promptTexts = file.prompts.map(p => {
+                        let content = p.content;
+                        if (optimizeExport) {
+                            content = content.replace(/[\n\r\s]+/g, ' ').trim();
+                        }
+                        return `[${p.title}]\n${content}`;
+                    });
+                    
+                    return [header, params, ...promptTexts, separator, ""].filter(Boolean);
+                }).join('\n');
+              };
+
+              const bulkText = generateBulkText();
+
+              return (
+                  <div className="space-y-6 max-w-5xl mx-auto">
+                      <Card className="border-blue-500/30 bg-blue-900/10">
+                          <div className="p-4 border-b border-blue-500/20 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                              <h3 className="font-bold text-blue-100 flex items-center gap-2">
+                                  <Icon name="Settings" className="w-5 h-5 text-blue-400"/> 批量導出工具 (Bulk Export)
+                              </h3>
+                              <div className="flex flex-wrap items-center gap-4">
+                                  <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer select-none bg-gray-800/50 px-3 py-1.5 rounded border border-gray-700 hover:border-gray-500 transition-colors">
+                                      <input
+                                          type="checkbox"
+                                          checked={optimizeExport}
+                                          onChange={(e) => setOptimizeExport(e.target.checked)}
+                                          className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
+                                      />
+                                      單行優化 (去除換行)
+                                  </label>
+                                  <Button variant="primary" className="h-9 text-xs shadow-none" onClick={() => copyToClipboard(bulkText, 'bulk-export')}>
+                                       {copyStatus['bulk-export'] ? <Icon name="Check" className="w-4 h-4" /> : <Icon name="Copy" className="w-4 h-4" />}
+                                       {copyStatus['bulk-export'] ? "已複製" : "複製全部文本"}
+                                  </Button>
+                              </div>
+                          </div>
+                          <div className="p-0">
+                              <textarea
+                                  readOnly
+                                  value={bulkText}
+                                  placeholder="這裡將顯示所有圖片的提取結果..."
+                                  className="w-full h-40 bg-gray-950/50 p-4 text-xs font-mono text-gray-300 focus:outline-none resize-y border-0"
+                              />
+                          </div>
+                      </Card>
+
+                      <div className="grid grid-cols-1 gap-4">
+                          {filesData.map((item, index) => (
+                              <Card key={item.id} className="border-gray-700 bg-gray-800/40">
+                                  <div className="flex flex-col sm:flex-row">
+                                      {/* Image Thumbnail */}
+                                      <div className="p-3 bg-black/20 sm:w-48 flex-shrink-0 flex flex-col gap-2 border-b sm:border-b-0 sm:border-r border-gray-700/50">
+                                          <div className="relative group cursor-pointer" onClick={() => setLightboxImage(item.previewUrl)}>
+                                              <img src={item.previewUrl} className="w-full h-32 object-cover rounded border border-gray-700 bg-gray-900" alt="" />
+                                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                                                  <Icon name="Maximize" className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 drop-shadow-lg" />
+                                              </div>
+                                          </div>
+                                          <div className="overflow-hidden">
+                                              <div className="text-sm font-bold text-gray-200 truncate" title={item.name}>{item.name}</div>
+                                              
+                                              {/* Mini Stats */}
+                                              <div className="flex flex-wrap gap-1 mt-2">
+                                                  {item.genInfo.seed && <Badge color="green" className="text-[9px]">{item.genInfo.seed}</Badge>}
+                                                  {item.genInfo.model && <Badge color="blue" className="text-[9px] max-w-full truncate">{item.genInfo.model}</Badge>}
+                                              </div>
+
+                                              {item.error && <span className="text-xs text-red-400 block mt-1 bg-red-900/20 px-1 rounded">{item.error}</span>}
+                                          </div>
+                                      </div>
+                                      
+                                      {/* Content */}
+                                      <div className="p-3 flex-1 flex flex-col gap-3">
+                                          {item.prompts.length > 0 ? (
+                                              item.prompts.map((p, pIdx) => (
+                                                  <div key={pIdx} className="space-y-1">
+                                                      <div className="flex justify-between items-center">
+                                                          <Badge color={p.type === 'positive' ? 'green' : p.type === 'negative' ? 'red' : 'gray'}>
+                                                              {p.title}
+                                                          </Badge>
+                                                          <button 
+                                                            onClick={() => copyToClipboard(p.content, `b-${item.id}-${pIdx}`)}
+                                                            className="text-xs text-gray-500 hover:text-white flex items-center gap-1 bg-gray-700/50 px-2 py-1 rounded hover:bg-gray-600 transition-colors"
+                                                          >
+                                                              {copyStatus[`b-${item.id}-${pIdx}`] ? <Icon name="Check" className="w-3 h-3 text-green-400" /> : <Icon name="Copy" className="w-3 h-3" />}
+                                                              複製
+                                                          </button>
+                                                      </div>
+                                                      <div className="text-xs text-gray-300 font-mono bg-black/30 p-2.5 rounded border border-gray-700/30 max-h-32 overflow-y-auto whitespace-pre-wrap">
+                                                          {p.content}
+                                                      </div>
+                                                  </div>
+                                              ))
+                                          ) : (
+                                              <div className="text-sm text-gray-500 italic h-full flex items-center justify-center">無提取內容</div>
+                                          )}
+                                      </div>
+                                  </div>
+                              </Card>
+                          ))}
+                      </div>
+                      {filesData.length === 0 && <div className="text-center text-gray-500 py-10">無檔案</div>}
+                  </div>
+              );
+          };
+
+          if (filesData.length === 0) {
+            return (
+              <div className="min-h-screen bg-gray-950 text-gray-100 font-sans p-6 flex flex-col items-center justify-center relative overflow-hidden">
+                 {/* Background decoration */}
+                 <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0 pointer-events-none opacity-20">
+                    <div className="absolute -top-[10%] -left-[10%] w-[50%] h-[50%] bg-blue-900/30 rounded-full blur-[100px]"></div>
+                    <div className="absolute top-[20%] right-[10%] w-[30%] h-[30%] bg-purple-900/30 rounded-full blur-[80px]"></div>
+                 </div>
+
+                 <div className="max-w-2xl w-full text-center space-y-8 z-10">
+                    <div className="flex flex-col items-center justify-center gap-4 mb-6">
+                        <div className="bg-gray-800/50 p-4 rounded-2xl border border-gray-700 shadow-xl backdrop-blur-sm">
+                            <Icon name="Terminal" className="text-blue-400 w-12 h-12" />
+                        </div>
+                        <h1 className="text-4xl font-extrabold bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+                            ComfyUI Info Extractor
+                        </h1>
+                        <p className="text-gray-400 max-w-md">
+                            拖放 ComfyUI 生成的 PNG 圖片，即可快速分析 Prompt、Model、Seed 與 Workflow 資訊。完全本地運行。
+                        </p>
+                    </div>
+
+                    <div 
+                        className="group border-2 border-dashed border-gray-700 rounded-3xl p-16 text-center hover:border-blue-500 hover:bg-gray-800/30 transition-all cursor-pointer bg-gray-900/20 backdrop-blur-sm"
+                        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                        onDrop={handleDrop}
+                        onClick={() => document.getElementById('fileInput').click()}
+                    >
+                        <input 
+                            type="file" 
+                            id="fileInput" 
+                            accept="image/png,image/jpeg" 
+                            multiple
+                            className="hidden"
+                            onChange={(e) => e.target.files && processFiles(e.target.files)}
+                        />
+                        <div className="flex flex-col items-center gap-6 pointer-events-none transition-transform group-hover:scale-105 duration-300">
+                            <div className="bg-gray-800 p-5 rounded-full shadow-lg group-hover:bg-blue-600 transition-colors">
+                                <Icon name="Upload" className="w-10 h-10 text-blue-400 group-hover:text-white" />
+                            </div>
+                            <div>
+                                <p className="text-xl font-medium text-gray-200">點擊或拖放圖片至此</p>
+                                <p className="text-gray-500 mt-2 text-sm">支援批量處理 • 支援 PNG Metadata</p>
+                            </div>
+                        </div>
+                    </div>
+                 </div>
+              </div>
+            );
+          }
+
+          return (
+            <div className="min-h-screen bg-gray-950 text-gray-100 font-sans flex flex-col overflow-hidden">
+              <Lightbox />
+              
+              <header className="bg-gray-900/80 border-b border-gray-800 py-3 px-4 md:px-6 shadow-md z-20 backdrop-blur-md">
+                <div className="flex items-center justify-between max-w-[1600px] mx-auto w-full">
+                   <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2" onClick={clearAll} role="button">
+                         <Icon name="Terminal" className="text-blue-500 w-6 h-6" />
+                         <h1 className="text-lg font-bold text-gray-200 hidden md:block">ComfyUI Extractor</h1>
+                      </div>
+                      <div className="h-6 w-px bg-gray-700 mx-2 hidden md:block"></div>
+                      <div className="flex bg-gray-800 p-1 rounded-lg border border-gray-700/50">
+                         <button 
+                            onClick={() => setViewMode('single')}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'single' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/30'}`}
+                         >
+                            <Icon name="Grid" className="w-4 h-4" /> <span className="hidden sm:inline">單張</span>
+                         </button>
+                         <button 
+                            onClick={() => setViewMode('batch')}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'batch' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/30'}`}
+                         >
+                            <Icon name="List" className="w-4 h-4" /> <span className="hidden sm:inline">列表</span>
+                         </button>
+                      </div>
+                   </div>
+
+                   <div className="flex items-center gap-3">
+                      <span className="text-xs text-gray-500 font-mono hidden md:block border border-gray-800 px-2 py-1 rounded bg-gray-900">
+                          {filesData.length} FILES
+                      </span>
+                      <Button 
+                         variant="secondary"
+                         onClick={() => document.getElementById('addMoreInput').click()}
+                         className="h-9 text-xs"
+                      >
+                         <Icon name="Plus" className="w-4 h-4" /> <span className="hidden sm:inline">新增</span>
+                      </Button>
+                      <input 
+                            type="file" 
+                            id="addMoreInput" 
+                            accept="image/png,image/jpeg" 
+                            multiple
+                            className="hidden"
+                            onChange={(e) => e.target.files && processFiles(e.target.files)}
+                      />
+                      <Button 
+                         variant="danger"
+                         onClick={clearAll}
+                         className="h-9 text-xs"
+                      >
+                         <Icon name="Trash2" className="w-4 h-4" /> <span className="hidden sm:inline">清空</span>
+                      </Button>
+                   </div>
+                </div>
+              </header>
+
+              <div className="flex-1 overflow-hidden flex max-w-[1600px] mx-auto w-full">
+                 
+                 {viewMode === 'single' && (
+                     <aside className="w-20 md:w-64 bg-gray-900/30 border-r border-gray-800 overflow-y-auto flex-shrink-0 custom-scrollbar flex flex-col">
+                        <div className="p-3 border-b border-gray-800 hidden md:flex justify-between items-center sticky top-0 bg-gray-950/90 backdrop-blur z-10">
+                           <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">File List</span>
+                           <Icon name="ArrowDownAZ" className="w-3 h-3 text-gray-600" />
+                        </div>
+                        <div className="p-2 space-y-1 flex-1">
+                           {filesData.map((item, idx) => (
+                              <div 
+                                key={item.id}
+                                onClick={() => setSelectedIndex(idx)}
+                                className={`group flex flex-col md:flex-row items-center md:gap-3 p-2 rounded-lg cursor-pointer transition-all border ${selectedIndex === idx ? 'bg-blue-600/10 border-blue-500/50 shadow-[0_0_15px_rgba(37,99,235,0.1)]' : 'hover:bg-gray-800 border-transparent'}`}
+                              >
+                                 <div className="relative w-10 h-10 flex-shrink-0">
+                                     <img src={item.previewUrl} className={`w-10 h-10 object-cover rounded bg-black/40 ${selectedIndex === idx ? 'ring-2 ring-blue-500' : ''}`} alt="" />
+                                     {item.error && <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border border-black"></div>}
+                                 </div>
+                                 <div className="overflow-hidden flex-1 hidden md:block">
+                                    <div className={`text-xs font-medium truncate ${selectedIndex === idx ? 'text-blue-100' : 'text-gray-400 group-hover:text-gray-300'}`}>{item.name}</div>
+                                    <div className="text-[10px] text-gray-600 flex items-center gap-2">
+                                        <span>{item.prompts.length} tags</span>
+                                        {item.genInfo.seed && <span className="text-green-500/70">●</span>}
+                                    </div>
+                                 </div>
+                                 <button 
+                                    onClick={(e) => removeFile(e, idx)}
+                                    className="hidden md:block opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-500/20 hover:text-red-300 rounded text-gray-500 transition-all"
+                                 >
+                                    <Icon name="X" className="w-3 h-3" />
+                                 </button>
+                              </div>
+                           ))}
+                        </div>
+                     </aside>
+                 )}
+
+                 <main className="flex-1 overflow-y-auto bg-gray-950 custom-scrollbar relative">
+                     <div 
+                        className={`h-full p-4 md:p-6 ${isProcessing ? 'opacity-50 pointer-events-none blur-sm' : ''}`}
+                        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                        onDrop={handleDrop}
+                     >
+                         {viewMode === 'single' ? <SingleView /> : <BatchView />}
+                     </div>
+                     
+                     {isProcessing && (
+                         <div className="absolute inset-0 flex items-center justify-center z-50">
+                             <div className="bg-gray-800 px-8 py-6 rounded-2xl shadow-2xl border border-gray-700 flex flex-col items-center gap-4 animate-in fade-in zoom-in duration-200">
+                                 <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                                 <span className="font-medium text-gray-200">正在解析 ComfyUI 元數據...</span>
+                             </div>
+                         </div>
+                     )}
+                 </main>
+              </div>
+            </div>
+          );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<ComfyUIExtractor />);
+    </script>
+</body>
+</html>
