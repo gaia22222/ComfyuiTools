@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Visual Renamer (Web V29.4 - 詳細日誌版)</title>
+    <title>Visual Renamer (Web V30.2 - AG-PSD Fix 2)</title>
     
     <!-- 引入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -39,6 +39,28 @@
     <!-- 引入 JSZip 與 FileSaver -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+    <!-- 1. 引入 Buffer Polyfill (ag-psd 在某些環境仍可能需要) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/buffer/6.0.3/buffer.min.js"></script>
+
+    <!-- 2. 設定環境變數 Polyfills -->
+    <script>
+        // 確保 process 存在
+        if (typeof window.process === 'undefined') {
+            window.process = { env: {} };
+        }
+        // 確保 Buffer 存在 (從 buffer 庫橋接)
+        if (typeof window.Buffer === 'undefined') {
+            if (window.buffer && window.buffer.Buffer) {
+                window.Buffer = window.buffer.Buffer;
+            } else {
+                window.Buffer = { isBuffer: () => false };
+            }
+        }
+    </script>
+
+    <!-- 3. 引入 ag-psd (改用 bundle 版本以修復 exports is not defined 錯誤) -->
+    <script src="https://cdn.jsdelivr.net/npm/ag-psd@29.0.0/dist/bundle.min.js"></script>
 
     <style>
         :root {
@@ -127,6 +149,22 @@
             color: white;
         }
 
+        /* PSD 標記 */
+        .psd-badge {
+            position: absolute;
+            bottom: 6px;
+            right: 6px;
+            padding: 2px 4px;
+            background-color: #1e3a8a; /* blue-900 */
+            color: #93c5fd; /* blue-300 */
+            border-radius: 3px;
+            font-size: 9px;
+            font-weight: 700;
+            z-index: 10;
+            pointer-events: none;
+            border: 1px solid rgba(147, 197, 253, 0.3);
+        }
+
         /* 移除按鈕 */
         .remove-btn {
             position: absolute;
@@ -160,6 +198,18 @@
             object-fit: cover; 
             pointer-events: none;
             transition: opacity 0.2s;
+        }
+
+        /* 預覽失敗提示 */
+        .preview-error {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #ef4444;
+            height: 100%;
+            width: 100%;
+            background: rgba(239, 68, 68, 0.1);
         }
 
         /* 分隔桿 */
@@ -337,7 +387,7 @@
                 <svg class="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
                 Visual Renamer
             </div>
-            <span class="px-1.5 py-0.5 rounded text-[10px] bg-zinc-800 text-zinc-500 border border-zinc-700">V29.4</span>
+            <span class="px-1.5 py-0.5 rounded text-[10px] bg-zinc-800 text-zinc-500 border border-zinc-700">V30.2 (AG-PSD Fix 2)</span>
         </div>
 
         <div class="flex items-center gap-4">
@@ -390,8 +440,8 @@
                 <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none" id="emptyMsg">
                     <div class="flex flex-col items-center opacity-40">
                         <svg class="w-12 h-12 text-zinc-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
-                        <p class="text-zinc-400 font-medium">拖曳圖片至此</p>
-                        <p class="text-xs text-zinc-600 mt-1">支援鍵盤快捷鍵：Del 刪除, Ctrl+Z 復原</p>
+                        <p class="text-zinc-400 font-medium">拖曳圖片或 PSD 至此</p>
+                        <p class="text-xs text-zinc-600 mt-1">支援 JPG, PNG, WebP, PSD</p>
                     </div>
                 </div>
 
@@ -460,7 +510,7 @@
         </div>
     </div>
 
-    <!-- 操作日誌面板 (新功能) -->
+    <!-- 操作日誌面板 -->
     <div id="historyPanel" class="flex flex-col">
         <div class="px-3 py-2 border-b border-zinc-700 bg-zinc-800 text-xs font-bold text-zinc-400 flex items-center justify-between shrink-0">
             <span>操作日誌 (History)</span>
@@ -482,7 +532,8 @@
                     <svg class="w-5 h-5 mr-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m5 5H3a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                     選取檔案
                 </button>
-                <input type="file" id="fileInput" multiple accept="image/*" class="hidden" style="display:none">
+                <!-- 允許 PSD 檔案 -->
+                <input type="file" id="fileInput" multiple accept="image/*,.psd" class="hidden" style="display:none">
                 
                 <button onclick="clearAll()" class="bg-zinc-800 hover:bg-red-900/20 text-zinc-400 hover:text-red-400 border border-zinc-700 py-2.5 px-3 rounded-lg transition ml-1 active:scale-95 shrink-0" title="全部清空">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
@@ -534,6 +585,7 @@
                         <option value="image/jpeg">JPG</option>
                         <option value="image/png">PNG</option>
                         <option value="image/webp">WebP (推薦)</option>
+                        <option value="image/vnd.adobe.photoshop">PSD (Photoshop)</option>
                     </select>
                 </div>
 
@@ -629,7 +681,7 @@
         const historyList = document.getElementById('historyList');
         const historyBtn = document.getElementById('historyBtn');
 
-        // === 歷史紀錄功能 (核心修改) ===
+        // === 歷史紀錄功能 ===
         function getCurrentState() {
             return {
                 images: [...images], // 淺拷貝陣列
@@ -644,7 +696,6 @@
             };
         }
 
-        // 修改：加入 actionName 與 details 參數
         function saveStateToHistory(actionName = '操作', details = '') {
             if (historyStack.length >= 30) {
                 historyStack.shift();
@@ -689,18 +740,14 @@
         function undo() {
             if (historyStack.length === 0) return;
             
-            // 1. 將當前狀態存入 Redo 堆疊
             redoStack.push({
                 state: getCurrentState(),
                 action: '重做',
                 details: '還原此步驟'
             });
 
-            // 2. 取出歷史狀態並應用
             const record = historyStack.pop();
             applyState(record.state);
-            
-            // 3. 處理選取狀態
             refreshSelectionState();
 
             updateHistoryButtons();
@@ -710,7 +757,6 @@
         function redo() {
             if (redoStack.length === 0) return;
 
-            // 1. 將當前狀態存回 History 堆疊
             const now = new Date();
             const timeStr = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
             
@@ -721,10 +767,8 @@
                 time: timeStr
             });
 
-            // 2. 取出 Redo 狀態並應用
             const record = redoStack.pop();
             applyState(record.state);
-
             refreshSelectionState();
 
             updateHistoryButtons();
@@ -761,11 +805,8 @@
                 return;
             }
 
-            // 倒序顯示，最新的在上面
             [...historyStack].reverse().forEach((record, revIndex) => {
-                // 真實 index
                 const realIndex = historyStack.length - 1 - revIndex;
-                
                 const div = document.createElement('div');
                 div.className = 'history-item';
                 div.innerHTML = `
@@ -779,7 +820,6 @@
                     </div>
                     <svg class="w-4 h-4 text-zinc-600 group-hover:text-white flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path></svg>
                 `;
-                
                 div.onclick = () => restoreHistory(realIndex);
                 historyList.appendChild(div);
             });
@@ -801,12 +841,10 @@
             applyState(targetRecord.state);
             refreshSelectionState();
             updateHistoryButtons();
-            
             renderHistoryLog();
         }
 
         function updateHistoryButtons() {
-            // Undo 按鈕狀態
             undoBtn.disabled = historyStack.length === 0;
             if (historyStack.length === 0) {
                 undoBtn.classList.add('opacity-30', 'cursor-not-allowed');
@@ -816,7 +854,6 @@
                 undoBtn.classList.add('hover:text-white', 'hover:bg-zinc-700');
             }
 
-            // Redo 按鈕狀態
             redoBtn.disabled = redoStack.length === 0;
             if (redoStack.length === 0) {
                 redoBtn.classList.add('opacity-30', 'cursor-not-allowed');
@@ -830,7 +867,6 @@
         // === 排序功能 ===
         function sortImages(type) {
             if (images.length === 0) return;
-            // 記錄詳細資訊
             let actionName = '排序';
             let detail = '';
             
@@ -882,7 +918,8 @@
                         const spinner = document.getElementById(`spinner_${imgObj.id}`);
                         if(spinner) spinner.remove();
                         
-                        if (!card.querySelector('.thumb-img')) {
+                        // 檢查是否已有圖片
+                        if (!card.querySelector('.thumb-img') && !card.querySelector('.preview-error')) {
                             const img = document.createElement('img');
                             img.src = imgObj.previewUrl;
                             img.className = 'thumb-img object-cover w-full h-full';
@@ -893,6 +930,12 @@
                         if (imgObj.id === selectedImageId) {
                             card.classList.add('selected');
                         }
+                    } else if (imgObj.loaded && imgObj.error) {
+                        // 處理已載入但錯誤的狀態
+                        const card = document.getElementById(imgObj.id);
+                        const spinner = document.getElementById(`spinner_${imgObj.id}`);
+                        if(spinner) spinner.remove();
+                        showErrorOnCard(card, "預覽失敗");
                     }
                 });
             }
@@ -910,7 +953,6 @@
                     if (oldIndex !== newIndex) {
                         if (images[oldIndex] === undefined) return;
                         
-                        // 動作前保存狀態
                         saveStateToHistory('移動圖片', '手動調整順序'); 
                         
                         const movedItem = images.splice(oldIndex, 1)[0];
@@ -1026,37 +1068,83 @@
 
         async function handleFiles(fileList) {
             if (!fileList.length) return;
-            const validFiles = Array.isArray(fileList) ? fileList : Array.from(fileList).filter(file => file.type.startsWith('image/'));
+            
+            // 允許 image 開頭的類型，或者 .psd 結尾的檔案
+            const validFiles = Array.from(fileList).filter(file => {
+                return file.type.startsWith('image/') || file.name.toLowerCase().endsWith('.psd');
+            });
             
             if (validFiles.length === 0) {
-                showModal("錯誤", "未偵測到圖片檔案");
+                showModal("錯誤", "未偵測到支援的圖片或 PSD 檔案");
                 return;
             }
 
-            saveStateToHistory('匯入圖片', `新增 ${validFiles.length} 張項目`); 
+            saveStateToHistory('匯入檔案', `新增 ${validFiles.length} 個項目`); 
 
             emptyMsg.style.display = 'none';
             const startNum = parseInt(startNumInput.value) || 1;
 
             for (const file of validFiles) {
                 const id = 'img_' + Math.random().toString(36).substr(2, 9);
+                const isPsd = file.name.toLowerCase().endsWith('.psd');
+
                 const imgObj = {
                     id: id,
                     file: file,
                     previewUrl: null,
-                    loaded: false
+                    loaded: false,
+                    isPsd: isPsd,
+                    error: false
                 };
                 
                 images.push(imgObj);
                 createCardDOM(imgObj, images.length - 1, startNum);
                 
-                readFileAsync(file).then(url => {
-                    imgObj.previewUrl = url;
-                    imgObj.loaded = true;
-                    updateCardImage(id, url);
-                });
+                // 異步讀取內容
+                if (isPsd) {
+                    readPsdAsDataURL(file).then(url => {
+                        imgObj.previewUrl = url;
+                        imgObj.loaded = true;
+                        updateCardImage(id, url);
+                        if(selectedImageId === id) updatePreviewPane(id); 
+                    }).catch(err => {
+                        console.error("PSD Load Error", err);
+                        imgObj.loaded = true;
+                        imgObj.error = true;
+                        
+                        const card = document.getElementById(id);
+                        if (card) {
+                            const spinner = card.querySelector('.animate-spin');
+                            if(spinner) spinner.remove();
+                            showErrorOnCard(card, "預覽失敗");
+                        }
+                    });
+                } else {
+                    readFileAsync(file).then(url => {
+                        imgObj.previewUrl = url;
+                        imgObj.loaded = true;
+                        updateCardImage(id, url);
+                    });
+                }
             }
             updateIndexes();
+        }
+
+        function showErrorOnCard(card, msg) {
+            if(!card) return;
+            card.classList.add('border-zinc-700', 'border'); 
+            const existingImg = card.querySelector('.thumb-img');
+            if(existingImg) existingImg.remove();
+            
+            if(card.querySelector('.preview-error')) return;
+
+            const errDiv = document.createElement('div');
+            errDiv.className = 'preview-error';
+            errDiv.innerHTML = `
+                <svg class="w-8 h-8 text-zinc-600 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                <span class="text-[10px] text-zinc-500 font-medium">${msg}</span>
+            `;
+            card.appendChild(errDiv);
         }
 
         function readFileAsync(file) {
@@ -1068,44 +1156,132 @@
             });
         }
 
+        // 使用 ag-psd 讀取 PSD 並轉為預覽圖
+        async function readPsdAsDataURL(file) {
+            if (!window.agPsd) throw new Error("AG-PSD library not loaded");
+            
+            try {
+                const buffer = await file.arrayBuffer();
+                
+                // 使用 ag-psd 讀取
+                const psd = agPsd.readPsd(buffer);
+                
+                const canvas = document.createElement('canvas');
+                canvas.width = psd.width;
+                canvas.height = psd.height;
+                const ctx = canvas.getContext('2d');
+
+                if (psd.canvas) {
+                    // ag-psd 在瀏覽器環境下，psd.canvas 是一個 HTMLCanvasElement
+                    ctx.drawImage(psd.canvas, 0, 0);
+                } else {
+                    throw new Error("此 PSD 無複合預覽圖 (Composite Image)");
+                }
+
+                return canvas.toDataURL();
+            } catch (err) {
+                console.error(err);
+                throw err;
+            }
+        }
+
         async function processImage(file, targetFormat, needClean) {
-            if (targetFormat === 'original' && !needClean) {
-                return file;
+            const isPsd = file.name.toLowerCase().endsWith('.psd');
+
+            // 1. 如果目標是原始格式，直接回傳檔案
+            if (targetFormat === 'original') {
+                return file; 
+            }
+
+            // 2. 如果目標是 PSD (匯出為 PSD)
+            if (targetFormat === 'image/vnd.adobe.photoshop') {
+                 return new Promise(async (resolve, reject) => {
+                    try {
+                        // 先將來源 (不論是圖片還是 PSD) 載入為 Canvas
+                        const imgCanvas = await loadImageToCanvas(file);
+                        
+                        // 建構 ag-psd 需要的物件結構
+                        // 這裡我們將圖片作為單一圖層寫入
+                        const psdData = {
+                            width: imgCanvas.width,
+                            height: imgCanvas.height,
+                            children: [
+                                {
+                                    name: 'Layer 1',
+                                    canvas: imgCanvas // ag-psd 瀏覽器版支援直接傳入 HTMLCanvasElement
+                                }
+                            ]
+                        };
+
+                        // 寫入 PSD Buffer
+                        const buffer = agPsd.writePsd(psdData);
+                        
+                        // 轉為 Blob
+                        const blob = new Blob([buffer], { type: 'image/vnd.adobe.photoshop' });
+                        resolve(blob);
+                    } catch (err) {
+                        reject(err);
+                    }
+                });
+            }
+
+            // 3. 一般圖片轉檔 (JPG/PNG/WebP)
+            return new Promise((resolve, reject) => {
+                let sourcePromise;
+                if (isPsd) {
+                    sourcePromise = readPsdAsDataURL(file);
+                } else {
+                    sourcePromise = readFileAsync(file);
+                }
+
+                sourcePromise.then(url => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0);
+                        
+                        let mimeType = targetFormat;
+                        let quality = 0.92;
+                        if (mimeType === 'image/jpeg' || mimeType === 'image/webp') {
+                            quality = 0.92; 
+                        }
+
+                        canvas.toBlob(blob => {
+                            if (blob) resolve(blob);
+                            else reject(new Error("Canvas conversion failed"));
+                        }, mimeType, quality);
+                    };
+                    img.onerror = () => reject(new Error("Image loading failed"));
+                    img.src = url;
+                }).catch(reject);
+            });
+        }
+
+        // 輔助函式：將任何支援的檔案載入為 Canvas (用於轉 PSD)
+        async function loadImageToCanvas(file) {
+            const isPsd = file.name.toLowerCase().endsWith('.psd');
+            let url;
+            
+            if (isPsd) {
+                url = await readPsdAsDataURL(file);
+            } else {
+                url = await readFileAsync(file);
             }
 
             return new Promise((resolve, reject) => {
                 const img = new Image();
-                const url = URL.createObjectURL(file);
-                
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
                     canvas.width = img.width;
                     canvas.height = img.height;
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0);
-                    
-                    let mimeType = file.type;
-                    if (targetFormat !== 'original') {
-                        mimeType = targetFormat;
-                    }
-
-                    let quality = 0.92;
-                    if (mimeType === 'image/jpeg' || mimeType === 'image/webp') {
-                        quality = 0.92; 
-                    }
-
-                    canvas.toBlob(blob => {
-                        URL.revokeObjectURL(url);
-                        if (blob) resolve(blob);
-                        else reject(new Error("Canvas conversion failed"));
-                    }, mimeType, quality);
+                    resolve(canvas);
                 };
-                
-                img.onerror = (e) => {
-                    URL.revokeObjectURL(url);
-                    reject(new Error("Image loading failed"));
-                };
-                
+                img.onerror = reject;
                 img.src = url;
             });
         }
@@ -1138,6 +1314,14 @@
             badge.className = 'index-badge';
             badge.innerText = index + startNum;
             div.appendChild(badge);
+
+            // 顯示 PSD 標籤
+            if (imgObj.isPsd) {
+                const psdBadge = document.createElement('div');
+                psdBadge.className = 'psd-badge';
+                psdBadge.innerText = 'PSD';
+                div.appendChild(psdBadge);
+            }
 
             const removeBtn = document.createElement('div');
             removeBtn.className = 'remove-btn';
@@ -1188,6 +1372,7 @@
             if (targetFormat === 'image/jpeg') return '.jpg';
             if (targetFormat === 'image/png') return '.png';
             if (targetFormat === 'image/webp') return '.webp';
+            if (targetFormat === 'image/vnd.adobe.photoshop') return '.psd';
             return '.jpg';
         }
 
@@ -1202,12 +1387,19 @@
             noSelectionMsg.style.display = 'none';
             selectionInfo.style.display = 'flex';
 
-            if (imgObj.loaded) previewImg.src = imgObj.previewUrl;
-            else previewImg.src = ''; 
+            // 處理預覽圖
+            if (imgObj.loaded && !imgObj.error) {
+                previewImg.src = imgObj.previewUrl;
+                previewImg.style.display = 'block';
+            } else {
+                // 錯誤或載入中
+                previewImg.src = '';
+                previewImg.style.display = 'none';
+            }
 
             previewName.innerText = imgObj.file.name;
             previewSize.innerText = formatBytes(imgObj.file.size);
-            previewType.innerText = imgObj.file.type || 'Unknown';
+            previewType.innerText = imgObj.file.type || (imgObj.isPsd ? 'image/vnd.adobe.photoshop' : 'Unknown');
 
             const index = images.indexOf(imgObj);
             const pre = prefixInput.value.trim(); 
