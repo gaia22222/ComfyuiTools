@@ -1,0 +1,1242 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weighted Prompt Studio (Pro)</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        bg: { main: '#09090b', panel: '#18181b', surface: '#27272a', hover: '#3f3f46' },
+                        accent: { DEFAULT: '#3b82f6', hover: '#2563eb', dim: 'rgba(59, 130, 246, 0.1)' }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- 引入 SortableJS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    <!-- 引入 Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        :root {
+            --result-font-size: 12px;
+        }
+
+        body { background-color: #09090b; color: #e4e4e7; user-select: none; }
+        
+        /* 滾動條 */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #52525b; }
+
+        /* 卡片與輸入 */
+        .block-card {
+            background-color: #18181b;
+            border: 1px solid #27272a;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            transition: all 0.2s;
+        }
+        .block-card:hover { border-color: #3f3f46; }
+        .block-card.disabled {
+            opacity: 0.5;
+            border-style: dashed;
+            background-color: #0f0f10;
+        }
+        
+        input[type="text"], input[type="number"] {
+            background: #27272a;
+            border: 1px solid #3f3f46;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+            outline: none;
+            transition: border-color 0.2s;
+            font-size: 12px;
+        }
+        input[type="text"]:focus, input[type="number"]:focus {
+            border-color: #3b82f6;
+        }
+
+        /* Tag Colors (Danbooru Style) */
+        .tag-cat-0 { color: #60a5fa; } /* General - Blue */
+        .tag-cat-1 { color: #f87171; } /* Artist - Red */
+        .tag-cat-3 { color: #c084fc; } /* Copyright - Purple */
+        .tag-cat-4 { color: #4ade80; } /* Character - Green */
+        .tag-cat-5 { color: #fb923c; } /* Meta - Orange */
+        
+        input.tag-cat-0 { color: #60a5fa; }
+        input.tag-cat-1 { color: #f87171; }
+        input.tag-cat-3 { color: #c084fc; }
+        input.tag-cat-4 { color: #4ade80; }
+        input.tag-cat-5 { color: #fb923c; }
+
+        /* 滑桿樣式 */
+        input[type=range] {
+            -webkit-appearance: none;
+            background: transparent;
+            height: 16px;
+            cursor: pointer;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            background: #3f3f46;
+            border-radius: 2px;
+            transition: background 0.2s;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 12px;
+            width: 12px;
+            border-radius: 50%;
+            background: #d4d4d8;
+            margin-top: -4px;
+            transition: transform 0.1s, background 0.2s;
+        }
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+            background: #fff;
+        }
+        .weight-slider:hover::-webkit-slider-runnable-track {
+            background: #52525b;
+        }
+
+        /* 機率條 */
+        .prob-bar-container {
+            height: 3px;
+            background: #27272a;
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 2px;
+        }
+        .prob-bar {
+            height: 100%;
+            background: #3b82f6;
+            transition: width 0.3s ease;
+        }
+
+        /* 結果卡片 */
+        .result-card {
+            background: #18181b;
+            border: 1px solid #27272a;
+            padding: 10px;
+            border-radius: 6px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: var(--result-font-size);
+            color: #d4d4d8;
+            word-break: break-all;
+            cursor: pointer;
+            position: relative;
+            line-height: 1.4;
+        }
+        .result-card:hover { border-color: #4b5563; background: #27272a; }
+        .result-card:active { transform: scale(0.99); }
+
+        /* 拖曳樣式 */
+        .sortable-ghost { opacity: 0.4; background: #3b82f6; }
+        .drag-handle { cursor: grab; }
+        .drag-handle:active { cursor: grabbing; }
+
+        /* 自動完成建議選單 */
+        #suggestionBox {
+            position: absolute;
+            background-color: #18181b;
+            border: 1px solid #3f3f46;
+            border-radius: 6px;
+            max-height: 240px;
+            overflow-y: auto;
+            z-index: 9999;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+            display: none;
+            width: 250px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .suggestion-item {
+            padding: 6px 10px;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            border-bottom: 1px solid #27272a;
+        }
+        .suggestion-item:last-child { border-bottom: none; }
+        .suggestion-item:hover, .suggestion-item.active {
+            background-color: #3b82f6;
+            color: white;
+        }
+        /* Override text colors on hover/active for better contrast */
+        .suggestion-item:hover .suggestion-tag, .suggestion-item.active .suggestion-tag { color: white !important; }
+        
+        .suggestion-tag { font-size: 12px; font-weight: bold; }
+        .suggestion-meta { font-size: 10px; color: #a1a1aa; display: flex; justify-content: space-between; }
+        .suggestion-item:hover .suggestion-meta, .suggestion-item.active .suggestion-meta { color: #dbeafe; }
+        .match-highlight { text-decoration: underline; opacity: 0.8; }
+
+        /* 拖曳遮罩 */
+        #dragOverlay {
+            transition: opacity 0.2s, visibility 0.2s;
+        }
+        #dragOverlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        /* 載入中遮罩 */
+        #loadingOverlay {
+            display: none;
+        }
+        #loadingOverlay.active {
+            display: flex;
+        }
+
+        /* Toggle Switch */
+        .toggle-checkbox:checked {
+            right: 0;
+            border-color: #4ade80;
+        }
+        .toggle-checkbox:checked + .toggle-label {
+            background-color: #4ade80;
+        }
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 32px;
+            height: 18px;
+        }
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #3f3f46;
+            transition: .4s;
+            border-radius: 18px;
+        }
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 14px;
+            width: 14px;
+            left: 2px;
+            bottom: 2px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .toggle-slider {
+            background-color: #3b82f6;
+        }
+        input:checked + .toggle-slider:before {
+            transform: translateX(14px);
+        }
+
+        /* Tabs */
+        .tab-btn {
+            border-bottom: 2px solid transparent;
+            color: #71717a;
+        }
+        .tab-btn.active {
+            border-bottom-color: #3b82f6;
+            color: #fff;
+        }
+    </style>
+</head>
+<body class="flex flex-col h-screen overflow-hidden text-sm">
+
+    <!-- 載入中遮罩 -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-black/90 z-[60] flex flex-col items-center justify-center backdrop-blur-sm">
+        <div class="flex items-center gap-3 text-white mb-2">
+            <svg class="animate-spin h-6 w-6 text-accent" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span class="text-lg font-bold">正在處理資料...</span>
+        </div>
+        <p id="loadingText" class="text-zinc-400 text-sm">Saving to browser database...</p>
+    </div>
+
+    <!-- 拖曳上傳遮罩 -->
+    <div id="dragOverlay" class="fixed inset-0 bg-black/80 z-50 opacity-0 invisible flex flex-col items-center justify-center backdrop-blur-sm">
+        <div class="border-4 border-dashed border-zinc-500 rounded-xl p-12 text-center pointer-events-none">
+            <svg class="w-20 h-20 text-zinc-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+            <h2 class="text-2xl font-bold text-zinc-200 mb-2">釋放以匯入 CSV</h2>
+            <p class="text-zinc-400">支援多檔，資料將自動存入瀏覽器資料庫</p>
+        </div>
+    </div>
+
+    <!-- 頂部列 -->
+    <header class="h-12 bg-bg-panel border-b border-zinc-800 flex items-center justify-between px-4 shrink-0 z-30">
+        <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2 text-zinc-100 font-bold tracking-wide">
+                <svg class="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg>
+                Weighted Prompt Studio
+            </div>
+            
+            <label class="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded cursor-pointer border border-zinc-700 transition group" title="可選擇多個檔案，會累加至現有資料">
+                <svg class="w-4 h-4 text-green-500 group-hover:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                <span class="text-xs text-zinc-300">匯入 CSV</span>
+                <input type="file" id="csvFileInput" accept=".csv" multiple class="hidden" onchange="loadTagsFromCSV(this.files)">
+            </label>
+            <span id="tagCountBadge" class="text-[10px] text-zinc-500 font-mono hidden">0 tags loaded</span>
+            
+            <button onclick="clearDatabase()" class="text-[10px] text-red-500 hover:text-red-400 underline hidden" id="clearDbBtn">清除快取資料</button>
+        </div>
+        
+        <div class="flex items-center gap-4">
+            <button onclick="copyFullSyntax()" class="text-zinc-400 hover:text-white flex items-center gap-2 px-3 py-1.5 rounded hover:bg-zinc-800 transition text-xs">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path></svg>
+                複製語法
+            </button>
+            <div class="h-4 w-px bg-zinc-700"></div>
+            <button onclick="resetAll()" class="text-red-400 hover:text-red-300 text-xs font-bold px-2">清空</button>
+        </div>
+    </header>
+
+    <!-- 主內容 -->
+    <div class="flex-1 flex overflow-hidden relative bg-bg-main">
+        
+        <!-- 左側：編輯器 (Builder) -->
+        <div class="flex-1 flex flex-col min-w-[320px] border-r border-zinc-800">
+            
+            <!-- 工具列 -->
+            <div class="h-9 border-b border-zinc-800 bg-zinc-900/50 flex items-center justify-between px-4 shrink-0">
+                <span class="text-[10px] font-bold text-zinc-500 uppercase">Prompt Blocks</span>
+                <button onclick="addBlock()" class="text-accent hover:text-blue-400 text-[10px] font-bold flex items-center gap-1 transition">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                    新增區塊
+                </button>
+            </div>
+
+            <!-- 區塊列表區 -->
+            <div class="flex-1 overflow-y-auto custom-scrollbar p-3 relative" id="blocksContainer">
+                <!-- 動態生成區塊 -->
+                
+                <!-- 空狀態 -->
+                <div id="emptyState" class="flex flex-col items-center justify-center h-full opacity-40 select-none">
+                    <svg class="w-16 h-16 text-zinc-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+                    <p class="text-zinc-400 font-medium">點擊「新增區塊」開始建立</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右側：預覽與測試 -->
+        <div class="w-[360px] bg-bg-panel border-l border-zinc-800 flex flex-col z-20 shrink-0">
+            
+            <!-- 1. 語法預覽區域 -->
+            <div class="p-3 bg-zinc-900 border-b border-zinc-800 shrink-0">
+                <div class="flex justify-between items-center mb-1">
+                    <span class="text-[10px] font-bold text-zinc-500 uppercase">目前組合語法 (點擊複製)</span>
+                    <span id="saveStatus" class="text-[10px] text-zinc-600 transition-colors">區塊已自動儲存</span>
+                </div>
+                <div class="relative group cursor-pointer" onclick="clickToCopySyntax(this)" title="點擊複製內容">
+                    <textarea id="syntaxPreview" readonly class="w-full h-24 bg-black/30 border border-zinc-800 rounded p-2 text-[10px] font-mono text-zinc-400 resize-none outline-none focus:border-zinc-700 custom-scrollbar pointer-events-none"></textarea>
+                    <div id="copyFeedback" class="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                         <span class="text-white text-xs font-bold drop-shadow-md">點擊複製</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Header (預設 Chart active) -->
+            <div class="h-9 border-b border-zinc-800 flex items-center gap-1 px-2 bg-bg-panel select-none shrink-0">
+                <button class="tab-btn px-3 py-1.5 text-xs font-bold active" data-tab="charts" onclick="switchTab('charts')">圖表</button>
+                <button class="tab-btn px-3 py-1.5 text-xs font-bold" data-tab="simulation" onclick="switchTab('simulation')">模擬</button>
+            </div>
+
+            <!-- Tab Content -->
+            <div class="flex-1 flex flex-col overflow-hidden relative">
+                
+                <!-- 2. Simulation Tab (預設 hidden) -->
+                <div id="tab-simulation" class="flex flex-col h-full absolute inset-0 hidden">
+                    <div class="h-9 border-b border-zinc-800 flex items-center justify-between px-3 bg-bg-panel select-none shrink-0 gap-2">
+                        <span class="text-[10px] font-semibold text-zinc-500 uppercase">模擬設定</span>
+                        <div class="flex items-center gap-3">
+                            <div class="flex items-center gap-1 group" title="調整預覽文字大小">
+                                <svg class="w-3 h-3 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path></svg>
+                                <input type="range" id="fontSizeSlider" min="10" max="24" value="12" class="w-16 h-1">
+                            </div>
+                            <div class="h-3 w-px bg-zinc-700"></div>
+                            <div class="flex items-center gap-1">
+                                <span class="text-[10px] text-zinc-600">數量</span>
+                                <input type="number" id="batchCount" value="5" min="1" max="20" class="w-10 h-5 text-center text-[10px] bg-zinc-900 border-zinc-700 rounded">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="p-3 border-b border-zinc-800 shrink-0">
+                        <button onclick="simulateGenerate()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold py-2 rounded shadow-lg shadow-indigo-900/20 active:scale-95 transition">
+                            立即生成測試結果
+                        </button>
+                    </div>
+
+                    <div class="flex-1 overflow-y-auto p-3 custom-scrollbar space-y-2 bg-bg-panel" id="resultsContainer">
+                        <div class="text-center text-zinc-600 text-xs py-10">等待生成...</div>
+                    </div>
+                </div>
+
+                <!-- 3. Charts Tab (預設 visible) -->
+                <div id="tab-charts" class="flex flex-col h-full overflow-y-auto custom-scrollbar p-3 space-y-6 absolute inset-0 bg-bg-panel">
+                    <!-- Charts will be rendered here -->
+                    <div id="chartsContainer"></div>
+                    <div id="chartsEmptyState" class="text-center text-zinc-600 text-xs py-10 hidden">
+                        沒有啟用的區塊或 Tag
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- 自動完成選單容器 (全域) -->
+    <div id="suggestionBox"></div>
+
+    <!-- Template for Block (Updated with bottom button) -->
+    <template id="blockTemplate">
+        <div class="block-card p-3 relative group" data-id="">
+            <!-- 區塊標題列 -->
+            <div class="flex items-center justify-between mb-3 gap-2">
+                <!-- Toggle Switch -->
+                <label class="toggle-switch shrink-0" title="啟用/停用此區塊">
+                    <input type="checkbox" class="toggle-block-cb" onchange="toggleBlock(this)">
+                    <span class="toggle-slider"></span>
+                </label>
+
+                <input type="text" class="block-title bg-transparent border-none text-xs font-bold text-zinc-200 placeholder-zinc-600 focus:bg-zinc-800 flex-1 p-1 min-w-0" placeholder="區塊名稱 (選填)">
+                
+                <div class="flex items-center gap-2">
+                    <button class="add-tag-btn text-[10px] bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white px-2 py-0.5 rounded transition border border-zinc-700">
+                        + Tag
+                    </button>
+                    <button class="delete-block-btn text-zinc-600 hover:text-red-400 p-1 transition">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tags 列表容器 (Sortable) -->
+            <div class="tags-container space-y-1.5"></div>
+            
+            <div class="no-tags-msg hidden text-center text-[10px] text-zinc-600 py-2">
+                暫無 Tag，請點擊新增按鈕
+            </div>
+
+            <!-- New Bottom Add Button -->
+            <button class="add-tag-bottom-btn w-full py-1.5 mt-2 text-xs text-zinc-500 hover:text-zinc-300 border border-dashed border-zinc-700 hover:border-zinc-500 rounded transition flex items-center justify-center gap-1 hover:bg-zinc-800/50">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                新增 Tag
+            </button>
+        </div>
+    </template>
+
+    <script>
+        const blocksContainer = document.getElementById('blocksContainer');
+        const emptyState = document.getElementById('emptyState');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const syntaxPreview = document.getElementById('syntaxPreview');
+        const batchCountInput = document.getElementById('batchCount');
+        const fontSizeSlider = document.getElementById('fontSizeSlider');
+        const suggestionBox = document.getElementById('suggestionBox');
+        const tagCountBadge = document.getElementById('tagCountBadge');
+        const dragOverlay = document.getElementById('dragOverlay');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const loadingText = document.getElementById('loadingText');
+        const clearDbBtn = document.getElementById('clearDbBtn');
+        const saveStatus = document.getElementById('saveStatus');
+        const chartsContainer = document.getElementById('chartsContainer');
+        const chartsEmptyState = document.getElementById('chartsEmptyState');
+
+        let blocks = [];
+        let blockIdCounter = 0;
+        let chartInstances = []; // Keep track of charts to destroy them
+        let currentTab = 'charts'; // Changed default to charts
+        
+        // ==========================================
+        //  設定區：自動載入同層 CSV
+        //  若檔案在 GitHub 同層目錄，請將檔名加入此陣列
+        //  例如: ['tags.csv', 'artists.csv']
+        // ==========================================
+        const PRELOAD_CSV_URLS = [
+             'wildcards/data.csv', 
+        ];
+
+        // ==========================================
+        //  BUILT-IN DATABASE (With Categories)
+        //  Format: [Tag, Category, Count, Alias]
+        //  Category: 0=General, 1=Artist, 3=Copyright, 4=Character, 5=Meta
+        // ==========================================
+        const rawTagData = [
+            ["1girl", 0, 4974288, "女の子,女性,少女,girl,animegirl"],
+            ["solo", 0, 4005860, "ソロ,solo,ひとり"],
+            ["long_hair", 0, 3608339, "ロングヘアー,長髪,黒髪ロング"],
+            ["breasts", 0, 3157499, "おっぱい,胸,boobs,乳"],
+            ["looking_at_viewer", 0, 2903688, "カメラ目線"],
+            ["masterpiece", 5, 9999999, "傑作,高品質"],
+            ["best_quality", 5, 9999998, "最高品質"],
+            ["hatsune_miku", 4, 1500000, "初音ミク"],
+            ["touhou", 3, 1200000, "東方Project"],
+            ["frieren", 4, 100000, "フリーレン"],
+            ["sousou_no_frieren", 3, 100000, "葬送のフリーレン"],
+            ["monochrome", 5, 100000, "モノクロ"],
+            ["wlop", 1, 50000, "Artist WLOP"],
+            ["ciloranko", 1, 40000, "Artist Ciloranko"]
+        ];
+        
+        // 初始化標籤庫
+        let tagDB = rawTagData.map(item => ({ t: item[0], cat: item[1], c: item[2], a: item[3] }));
+
+        // DB Setup
+        const DB_NAME = 'PromptStudioDB';
+        const STORE_NAME = 'tags';
+        const DB_VERSION = 2; 
+        let db;
+
+        // ... (Database Logic Same as before)
+        function initDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+                request.onupgradeneeded = (e) => {
+                    db = e.target.result;
+                    if (!db.objectStoreNames.contains(STORE_NAME)) {
+                        db.createObjectStore(STORE_NAME, { keyPath: 't' });
+                    }
+                };
+                request.onsuccess = (e) => {
+                    db = e.target.result;
+                    resolve(db);
+                };
+                request.onerror = (e) => reject(e);
+            });
+        }
+
+        async function loadTagsFromDB() {
+            if (!db) await initDB();
+            return new Promise((resolve) => {
+                const transaction = db.transaction([STORE_NAME], 'readonly');
+                const store = transaction.objectStore(STORE_NAME);
+                const countRequest = store.count();
+
+                countRequest.onsuccess = () => {
+                    if (countRequest.result > 0) {
+                        const getAll = store.getAll();
+                        getAll.onsuccess = () => {
+                            tagDB = getAll.result.sort((a, b) => b.c - a.c);
+                            updateTagCountDisplay();
+                            clearDbBtn.classList.remove('hidden');
+                            clearDbBtn.innerText = `清除快取 (${formatCount(tagDB.length)})`;
+                            resolve(true);
+                        };
+                    } else {
+                        resolve(false);
+                    }
+                };
+            });
+        }
+
+        async function saveTagsToDB(newTagsArray) {
+            if (!db) await initDB();
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([STORE_NAME], 'readwrite');
+                const store = transaction.objectStore(STORE_NAME);
+                newTagsArray.forEach(tag => store.put(tag));
+                transaction.oncomplete = () => resolve();
+                transaction.onerror = (e) => reject(e);
+            });
+        }
+        
+        async function clearDatabase() {
+            if(!confirm("確定要清除快取資料嗎？")) return;
+            if (!db) await initDB();
+            const transaction = db.transaction([STORE_NAME], 'readwrite');
+            transaction.objectStore(STORE_NAME).clear();
+            transaction.oncomplete = () => {
+                alert("已清除快取，網頁將重新整理。");
+                location.reload();
+            };
+        }
+
+        function saveBlocksToLocalStorage() {
+            const data = { blocks: blocks, blockIdCounter: blockIdCounter };
+            localStorage.setItem('promptStudioBlocks', JSON.stringify(data));
+            saveStatus.classList.remove('text-zinc-600');
+            saveStatus.classList.add('text-green-500');
+            setTimeout(() => {
+                saveStatus.classList.remove('text-green-500');
+                saveStatus.classList.add('text-zinc-600');
+            }, 1000);
+        }
+
+        function loadBlocksFromLocalStorage() {
+            const dataStr = localStorage.getItem('promptStudioBlocks');
+            if (dataStr) {
+                try {
+                    const data = JSON.parse(dataStr);
+                    if (data.blocks && Array.isArray(data.blocks)) {
+                        blocks = data.blocks;
+                        blocks.forEach(b => { if(b.enabled === undefined) b.enabled = true; });
+                        blockIdCounter = data.blockIdCounter || 100;
+                        renderBlocks();
+                        updatePreview();
+                        return true;
+                    }
+                } catch (e) { console.error("Failed to load blocks", e); }
+            }
+            return false;
+        }
+
+        // 新增：載入遠端 CSV 的函數
+        async function loadRemoteCSVFiles() {
+            if (PRELOAD_CSV_URLS.length === 0) return;
+            
+            // 檢查是否在本地 file 協議運行
+            if (window.location.protocol === 'file:') {
+                console.warn("警告：偵測到您正在使用 file:// 協議。瀏覽器可能會因 CORS 安全策略阻止讀取同層 CSV。建議使用 GitHub Pages 或本地伺服器。");
+            }
+
+            // 顯示載入狀態
+            const originalText = loadingText.innerText;
+            loadingOverlay.classList.add('active');
+            loadingText.innerText = "正在從伺服器自動載入 CSV...";
+
+            const promises = PRELOAD_CSV_URLS.map(url => 
+                fetch(url)
+                    .then(res => {
+                        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+                        return res.text();
+                    })
+                    .then(text => {
+                        console.log(`Loaded remote CSV: ${url}`);
+                        return parseCSVContent(text);
+                    })
+                    .catch(e => {
+                        console.error(`Failed to load ${url}:`, e);
+                        return [];
+                    })
+            );
+
+            try {
+                const results = await Promise.all(promises);
+                const allRemoteTags = results.flat();
+                
+                if (allRemoteTags.length > 0) {
+                    const tagMap = new Map();
+                    // 先載入現有的
+                    tagDB.forEach(t => tagMap.set(t.t, t));
+                    // 覆蓋/新增遠端的
+                    allRemoteTags.forEach(t => tagMap.set(t.t, t));
+                    
+                    tagDB = Array.from(tagMap.values()).sort((a, b) => b.c - a.c);
+                    
+                    // 存回資料庫
+                    await saveTagsToDB(tagDB);
+                    
+                    // 更新 UI
+                    updateTagCountDisplay();
+                    clearDbBtn.classList.remove('hidden');
+                    clearDbBtn.innerText = `清除快取 (${formatCount(tagDB.length)})`;
+                    
+                    console.log(`Auto-loaded ${allRemoteTags.length} tags from remote files.`);
+                }
+            } catch (err) {
+                console.error("Error processing remote CSVs:", err);
+            } finally {
+                loadingOverlay.classList.remove('active');
+                loadingText.innerText = originalText;
+            }
+        }
+
+        async function init() {
+            try {
+                await initDB();
+                const hasCustomData = await loadTagsFromDB();
+                if (!hasCustomData) {
+                    updateTagCountDisplay();
+                    tagCountBadge.innerText = `Built-in: ${tagDB.length} tags`;
+                }
+                
+                // 嘗試載入設定的遠端 CSV
+                await loadRemoteCSVFiles();
+
+            } catch (e) { console.error("DB Init failed:", e); updateTagCountDisplay(); }
+
+            const loaded = loadBlocksFromLocalStorage();
+            if (!loaded) {
+                addBlock("範例：顏色");
+                const firstBlockId = blocks[0].id;
+                addTagToBlock(firstBlockId, "red", 1);
+                addTagToBlock(firstBlockId, "blue", 5);
+                addTagToBlock(firstBlockId, "1girl", 10);
+            }
+
+            // Force render charts initially since it's the default tab
+            if (currentTab === 'charts') {
+                renderCharts();
+            }
+        }
+
+        // CSV Logic
+        window.addEventListener('dragenter', (e) => { e.preventDefault(); dragOverlay.classList.add('active'); });
+        window.addEventListener('dragover', (e) => { e.preventDefault(); if(!dragOverlay.classList.contains('active')) dragOverlay.classList.add('active'); });
+        window.addEventListener('dragleave', (e) => { if (e.relatedTarget === null || e.clientX === 0 || e.clientY === 0) dragOverlay.classList.remove('active'); });
+        window.addEventListener('drop', (e) => { e.preventDefault(); dragOverlay.classList.remove('active'); if (e.dataTransfer.files.length > 0) loadTagsFromCSV(e.dataTransfer.files); });
+
+        async function loadTagsFromCSV(files) {
+            if (!files || files.length === 0) return;
+            loadingOverlay.classList.add('active');
+            loadingText.innerText = "正在讀取檔案...";
+
+            const tagMap = new Map();
+            tagDB.forEach(item => tagMap.set(item.t, item));
+            
+            let fileCount = 0;
+            const promises = Array.from(files).map(file => {
+                if (!file.name.toLowerCase().endsWith('.csv')) return Promise.resolve();
+                fileCount++;
+                return new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const newTags = parseCSVContent(e.target.result);
+                        newTags.forEach(tag => tagMap.set(tag.t, tag));
+                        resolve();
+                    };
+                    reader.readAsText(file);
+                });
+            });
+
+            await Promise.all(promises);
+
+            if (fileCount === 0) { loadingOverlay.classList.remove('active'); alert("未偵測到有效的 .csv"); return; }
+
+            tagDB = Array.from(tagMap.values()).sort((a, b) => b.c - a.c);
+            
+            setTimeout(async () => {
+                try {
+                    await saveTagsToDB(tagDB);
+                    loadingOverlay.classList.remove('active');
+                    alert(`成功匯入！\n共 ${tagDB.length} 個標籤已儲存。`);
+                    updateTagCountDisplay();
+                    clearDbBtn.classList.remove('hidden');
+                    clearDbBtn.innerText = `清除快取 (${formatCount(tagDB.length)})`;
+                } catch (e) {
+                    loadingOverlay.classList.remove('active');
+                    console.error(e);
+                    alert("儲存錯誤，但本次操作仍有效。");
+                    updateTagCountDisplay();
+                }
+            }, 100);
+        }
+
+        function parseCSVContent(text) {
+            const lines = text.split('\n');
+            const parsedTags = [];
+            const startIndex = lines[0].trim().startsWith('tag,') ? 1 : 0;
+            for (let i = startIndex; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+                const parts = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+                if (parts.length >= 2) {
+                    const tag = parts[0];
+                    const cat = parseInt(parts[1]) || 0; 
+                    const count = parseInt(parts[2]) || 0;
+                    let alias = parts[3] || '';
+                    if (alias.startsWith('"') && alias.endsWith('"')) alias = alias.slice(1, -1);
+                    parsedTags.push({ t: tag, cat: cat, c: count, a: alias });
+                }
+            }
+            return parsedTags;
+        }
+
+        function updateTagCountDisplay() { tagCountBadge.innerText = `${tagDB.length} tags loaded`; tagCountBadge.classList.remove('hidden'); }
+
+        // Block Logic
+        function addBlock(title = "") {
+            blockIdCounter++;
+            const id = blockIdCounter;
+            const blockData = { id: id, title: title, tags: [], enabled: true };
+            blocks.push(blockData);
+            renderBlocks();
+            saveBlocksToLocalStorage();
+            if(currentTab === 'charts') renderCharts();
+            setTimeout(() => {
+                const el = document.querySelector(`.block-card[data-id="${id}"] .block-title`);
+                if(el && !title) el.focus();
+            }, 50);
+        }
+
+        function removeBlock(id) {
+            blocks = blocks.filter(b => b.id !== id);
+            renderBlocks(); updatePreview(); saveBlocksToLocalStorage();
+            if(currentTab === 'charts') renderCharts();
+        }
+
+        function toggleBlock(checkbox) {
+            const card = checkbox.closest('.block-card');
+            const id = parseInt(card.dataset.id);
+            const block = blocks.find(b => b.id === id);
+            if(block) {
+                block.enabled = checkbox.checked;
+                if(block.enabled) card.classList.remove('disabled');
+                else card.classList.add('disabled');
+                updatePreview();
+                saveBlocksToLocalStorage();
+                if(currentTab === 'charts') renderCharts();
+            }
+        }
+
+        function updateBlockTitle(id, newTitle) {
+            const block = blocks.find(b => b.id === id);
+            if(block) { block.title = newTitle; updatePreview(); saveBlocksToLocalStorage(); if(currentTab === 'charts') renderCharts(); }
+        }
+
+        function getTagCategory(tagName) {
+            const found = tagDB.find(t => t.t === tagName);
+            return found ? found.cat : 0; 
+        }
+
+        function addTagToBlock(blockId, text = "", weight = 1) {
+            const block = blocks.find(b => b.id === blockId);
+            if (!block) return;
+            const cat = getTagCategory(text);
+            block.tags.push({ id: Date.now() + Math.random(), text: text, weight: weight, cat: cat });
+            renderBlocks(); updatePreview(); saveBlocksToLocalStorage();
+            if(currentTab === 'charts') renderCharts();
+        }
+
+        function updateTag(blockId, tagId, field, value) {
+            const block = blocks.find(b => b.id === blockId);
+            if (!block) return;
+            const tag = block.tags.find(t => t.id === tagId);
+            if (!tag) return;
+            
+            if (field === 'weight') value = parseInt(value) || 1;
+            tag[field] = value;
+            
+            if (field === 'text') {
+                tag.cat = getTagCategory(value);
+                const inputEl = document.querySelector(`[data-input-id="text-${tagId}"]`);
+                if(inputEl) {
+                    inputEl.className = inputEl.className.replace(/tag-cat-\d/, '');
+                    inputEl.classList.add(`tag-cat-${tag.cat}`);
+                }
+            }
+            
+            updateProbabilitiesDisplay(blockId);
+            updatePreview();
+            saveBlocksToLocalStorage();
+            if(currentTab === 'charts') renderCharts(); // Debounce this ideally, but simplicity first
+        }
+
+        function removeTag(blockId, tagId) {
+            const block = blocks.find(b => b.id === blockId);
+            if (!block) return;
+            block.tags = block.tags.filter(t => t.id !== tagId);
+            renderBlocks(); updatePreview(); saveBlocksToLocalStorage();
+            if(currentTab === 'charts') renderCharts();
+        }
+        
+        function handleSort(blockId, oldIndex, newIndex) {
+            const block = blocks.find(b => b.id == blockId);
+            if (!block) return;
+            const movedItem = block.tags.splice(oldIndex, 1)[0];
+            block.tags.splice(newIndex, 0, movedItem);
+            updatePreview(); saveBlocksToLocalStorage();
+        }
+
+        function renderBlocks() {
+            if (blocks.length === 0) {
+                emptyState.classList.remove('hidden');
+                blocksContainer.innerHTML = '';
+                blocksContainer.appendChild(emptyState);
+                return;
+            } else {
+                emptyState.classList.add('hidden');
+            }
+            const activeEl = document.activeElement;
+            const activeId = activeEl ? activeEl.dataset.inputId : null;
+            
+            blocksContainer.innerHTML = '';
+            blocks.forEach(block => {
+                const template = document.getElementById('blockTemplate').content.cloneNode(true);
+                const card = template.querySelector('.block-card');
+                card.dataset.id = block.id;
+                
+                if(block.enabled === false) card.classList.add('disabled');
+                const toggleCb = card.querySelector('.toggle-block-cb');
+                toggleCb.checked = (block.enabled !== false);
+                
+                const titleInput = card.querySelector('.block-title');
+                titleInput.value = block.title;
+                titleInput.oninput = (e) => updateBlockTitle(block.id, e.target.value);
+                
+                // Header Button (Retained)
+                card.querySelector('.add-tag-btn').onclick = () => addTagToBlock(block.id);
+                // Bottom Button (New)
+                card.querySelector('.add-tag-bottom-btn').onclick = () => addTagToBlock(block.id);
+                
+                card.querySelector('.delete-block-btn').onclick = () => removeBlock(block.id);
+
+                const tagsContainer = card.querySelector('.tags-container');
+                const totalWeight = block.tags.reduce((sum, t) => sum + t.weight, 0);
+
+                if (block.tags.length === 0) card.querySelector('.no-tags-msg').classList.remove('hidden');
+
+                new Sortable(tagsContainer, {
+                    animation: 150, handle: '.drag-handle', ghostClass: 'sortable-ghost',
+                    onEnd: function (evt) { handleSort(block.id, evt.oldIndex, evt.newIndex); }
+                });
+
+                block.tags.forEach(tag => {
+                    const prob = totalWeight > 0 ? ((tag.weight / totalWeight) * 100).toFixed(1) : 0;
+                    const catClass = `tag-cat-${tag.cat !== undefined ? tag.cat : 0}`;
+                    
+                    const tagRow = document.createElement('div');
+                    tagRow.className = 'flex items-center gap-2 bg-zinc-900/30 p-1.5 rounded border border-transparent hover:border-zinc-700 transition group/row tag-row';
+                    tagRow.innerHTML = `
+                        <div class="drag-handle text-zinc-600 hover:text-zinc-300 cursor-grab px-1 shrink-0 select-none"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"></path></svg></div>
+                        <div class="flex-1 flex flex-col gap-1 min-w-0">
+                            <div class="flex items-center gap-2">
+                                <input type="text" value="${tag.text}" class="flex-1 bg-transparent border-none p-0 text-xs font-mono placeholder-zinc-600 focus:ring-0 min-w-0 ${catClass}" placeholder="Tag Name" data-input-id="text-${tag.id}" data-type="tag-input" autocomplete="off" onchange="updateTag(${block.id}, ${tag.id}, 'text', this.value)">
+                                <span class="text-[9px] font-mono text-zinc-500 w-8 text-right prob-display shrink-0">${prob}%</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-[9px] text-zinc-600 uppercase font-bold w-3 shrink-0">W</span>
+                                <input type="range" min="1" max="10" step="1" value="${tag.weight}" class="flex-1 weight-slider" oninput="this.nextElementSibling.value = this.value; updateTag(${block.id}, ${tag.id}, 'weight', this.value)">
+                                <input type="number" min="1" max="10" step="1" value="${tag.weight}" class="w-8 h-4 text-center text-[10px] bg-zinc-900 border-zinc-700 rounded p-0" onchange="this.previousElementSibling.value = this.value; updateTag(${block.id}, ${tag.id}, 'weight', this.value)">
+                            </div>
+                            <div class="prob-bar-container"><div class="prob-bar" style="width: ${prob}%"></div></div>
+                        </div>
+                        <button class="text-zinc-600 hover:text-red-400 opacity-0 group-hover/row:opacity-100 transition px-1 shrink-0" onclick="removeTag(${block.id}, ${tag.id})">✕</button>
+                    `;
+                    tagsContainer.appendChild(tagRow);
+                });
+                blocksContainer.appendChild(card);
+            });
+            if (activeId) {
+                const el = document.querySelector(`[data-input-id="${activeId}"]`);
+                if (el) { el.focus(); const val = el.value; el.value = ''; el.value = val; }
+            }
+        }
+
+        function updateProbabilitiesDisplay(blockId) {
+            const block = blocks.find(b => b.id === blockId);
+            if (!block) return;
+            const card = document.querySelector(`.block-card[data-id="${blockId}"]`);
+            if (!card) return;
+            const totalWeight = block.tags.reduce((sum, t) => sum + t.weight, 0);
+            const tagRows = card.querySelectorAll('.tags-container > .tag-row'); 
+            block.tags.forEach((tag, index) => {
+                const row = tagRows[index];
+                if(row) {
+                    const prob = totalWeight > 0 ? ((tag.weight / totalWeight) * 100).toFixed(1) : 0;
+                    row.querySelector('.prob-display').innerText = `${prob}%`;
+                    row.querySelector('.prob-bar').style.width = `${prob}%`;
+                    const input = row.querySelector('input[type="text"]');
+                    input.className = input.className.replace(/tag-cat-\d/, '');
+                    input.classList.add(`tag-cat-${tag.cat!==undefined?tag.cat:0}`);
+                }
+            });
+        }
+
+        // --- Tabs Logic ---
+        function switchTab(tabName) {
+            currentTab = tabName;
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.tab === tabName);
+            });
+            
+            document.getElementById('tab-simulation').classList.toggle('hidden', tabName !== 'simulation');
+            document.getElementById('tab-charts').classList.toggle('hidden', tabName !== 'charts');
+            
+            if(tabName === 'charts') {
+                renderCharts();
+            }
+        }
+
+        // --- Charts Logic ---
+        function getCategoryColor(cat) {
+            switch(cat) {
+                case 0: return '#60a5fa'; // Blue
+                case 1: return '#f87171'; // Red
+                case 3: return '#c084fc'; // Purple
+                case 4: return '#4ade80'; // Green
+                case 5: return '#fb923c'; // Orange
+                default: return '#9ca3af'; // Gray
+            }
+        }
+
+        function renderCharts() {
+            // Cleanup old charts
+            chartInstances.forEach(c => c.destroy());
+            chartInstances = [];
+            chartsContainer.innerHTML = '';
+            
+            const activeBlocks = blocks.filter(b => b.enabled !== false && b.tags.length > 0);
+            
+            if (activeBlocks.length === 0) {
+                chartsEmptyState.classList.remove('hidden');
+                return;
+            } else {
+                chartsEmptyState.classList.add('hidden');
+            }
+
+            activeBlocks.forEach(block => {
+                // Wrapper
+                const wrapper = document.createElement('div');
+                wrapper.className = 'bg-zinc-900 rounded-lg p-4 border border-zinc-800';
+                
+                // Header
+                const title = document.createElement('h3');
+                title.className = 'text-xs font-bold text-zinc-400 mb-4 text-center';
+                title.innerText = block.title || `Block #${block.id}`;
+                wrapper.appendChild(title);
+                
+                // Canvas Container
+                const canvasContainer = document.createElement('div');
+                canvasContainer.style.position = 'relative';
+                canvasContainer.style.height = '200px';
+                canvasContainer.style.width = '100%';
+                
+                const canvas = document.createElement('canvas');
+                canvasContainer.appendChild(canvas);
+                wrapper.appendChild(canvasContainer);
+                chartsContainer.appendChild(wrapper);
+
+                // Prepare Data
+                const labels = block.tags.map(t => t.text || '(Empty)');
+                const data = block.tags.map(t => t.weight);
+                const colors = block.tags.map(t => getCategoryColor(t.cat));
+                
+                // Create Chart
+                const ctx = canvas.getContext('2d');
+                const chart = new Chart(ctx, {
+                    type: 'pie',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            data: data,
+                            backgroundColor: colors,
+                            borderWidth: 0,
+                            hoverOffset: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'right',
+                                labels: {
+                                    color: '#d4d4d8',
+                                    font: { size: 10, family: "'JetBrains Mono', monospace" },
+                                    boxWidth: 10
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const label = context.label || '';
+                                        const value = context.raw || 0;
+                                        const total = context.chart._metasets[context.datasetIndex].total;
+                                        const percentage = Math.round((value / total) * 100) + '%';
+                                        return `${label}: ${percentage}`;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+                chartInstances.push(chart);
+            });
+        }
+
+        // --- Autocomplete ---
+        let activeInput = null;
+        let currentSuggestions = [];
+        let currentSuggestionIndex = -1;
+
+        blocksContainer.addEventListener('input', function(e) {
+            if (e.target.dataset.type === 'tag-input') {
+                const val = e.target.value.trim();
+                activeInput = e.target;
+                if (val.length >= 1) showSuggestions(val, activeInput);
+                else hideSuggestions();
+            }
+        });
+        
+        blocksContainer.addEventListener('keydown', function(e) {
+            if (e.target.dataset.type !== 'tag-input') return;
+            if (suggestionBox.style.display === 'none') return;
+            if (e.key === 'ArrowDown') { e.preventDefault(); moveSelection(1); }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); moveSelection(-1); }
+            else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (currentSuggestionIndex >= 0 && currentSuggestions[currentSuggestionIndex]) {
+                    applySuggestion(currentSuggestions[currentSuggestionIndex].t);
+                }
+            } else if (e.key === 'Escape') hideSuggestions();
+        });
+
+        function moveSelection(direction) {
+            if (currentSuggestions.length === 0) return;
+            currentSuggestionIndex += direction;
+            if (currentSuggestionIndex < 0) currentSuggestionIndex = 0;
+            if (currentSuggestionIndex >= currentSuggestions.length) currentSuggestionIndex = currentSuggestions.length - 1;
+            renderActiveSuggestion();
+        }
+
+        function renderActiveSuggestion() {
+            const items = suggestionBox.querySelectorAll('.suggestion-item');
+            items.forEach((item, idx) => {
+                if (idx === currentSuggestionIndex) {
+                    item.classList.add('active');
+                    item.scrollIntoView({ block: 'nearest' });
+                } else item.classList.remove('active');
+            });
+        }
+
+        document.addEventListener('click', function(e) {
+            if (!suggestionBox.contains(e.target) && e.target !== activeInput) hideSuggestions();
+        });
+
+        function showSuggestions(query, inputEl) {
+            const lowerQuery = query.toLowerCase();
+            currentSuggestions = tagDB.filter(item => {
+                return item.t.toLowerCase().includes(lowerQuery) || (item.a && item.a.toLowerCase().includes(lowerQuery));
+            }).sort((a, b) => b.c - a.c).slice(0, 20);
+
+            if (currentSuggestions.length === 0) { hideSuggestions(); return; }
+            
+            currentSuggestionIndex = -1;
+            suggestionBox.innerHTML = '';
+            currentSuggestions.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = 'suggestion-item';
+                
+                let displayTag = item.t.replace(new RegExp(`(${query})`, 'gi'), '<span class="match-highlight">$1</span>');
+                const catClass = `tag-cat-${item.cat !== undefined ? item.cat : 0}`;
+                
+                div.innerHTML = `
+                    <div class="suggestion-tag ${catClass}">${displayTag}</div>
+                    <div class="suggestion-meta">
+                        <span>${formatCount(item.c)}</span>
+                        <span class="truncate max-w-[120px] ml-2" title="${item.a}">${item.a}</span>
+                    </div>
+                `;
+                div.onclick = () => applySuggestion(item.t);
+                div.onmouseenter = () => { currentSuggestionIndex = index; renderActiveSuggestion(); };
+                suggestionBox.appendChild(div);
+            });
+            const rect = inputEl.getBoundingClientRect();
+            suggestionBox.style.left = `${rect.left}px`;
+            suggestionBox.style.top = `${rect.bottom + window.scrollY + 2}px`;
+            suggestionBox.style.width = `${rect.width}px`; 
+            suggestionBox.style.display = 'block';
+        }
+
+        function hideSuggestions() { suggestionBox.style.display = 'none'; currentSuggestionIndex = -1; currentSuggestions = []; }
+        function applySuggestion(tag) {
+            if (activeInput) {
+                activeInput.value = tag;
+                activeInput.dispatchEvent(new Event('change', { bubbles: true }));
+                hideSuggestions(); activeInput.focus();
+            }
+        }
+
+        function generateSyntax() {
+            let finalPrompt = "";
+            blocks.forEach(block => {
+                if (block.enabled === false) return; 
+                if (block.tags.length === 0) return;
+                const validTags = block.tags.filter(t => t.text.trim() !== "");
+                if (validTags.length === 0) return;
+                const parts = validTags.map(t => `${t.weight}::${t.text.trim()}`);
+                if (parts.length > 0) finalPrompt += `{${parts.join("|")}} `;
+            });
+            return finalPrompt.trim();
+        }
+
+        function simulateGenerate() {
+            const syntax = generateSyntax();
+            if (!syntax) { resultsContainer.innerHTML = '<div class="text-center text-zinc-600 text-xs py-10">請先新增內容</div>'; return; }
+            resultsContainer.innerHTML = '';
+            const count = parseInt(batchCountInput.value) || 5;
+            for (let i = 0; i < count; i++) {
+                let promptResult = "";
+                blocks.forEach(block => {
+                    if (block.enabled === false) return; 
+                    if (block.tags.length === 0) return;
+                    const totalWeight = block.tags.reduce((sum, t) => sum + t.weight, 0);
+                    let random = Math.random() * totalWeight;
+                    for (const tag of block.tags) {
+                        if (random < tag.weight) { if (tag.text.trim()) promptResult += tag.text.trim() + ", "; break; }
+                        random -= tag.weight;
+                    }
+                });
+                if (promptResult.endsWith(", ")) promptResult = promptResult.slice(0, -2);
+                if (!promptResult) promptResult = "(Empty)";
+                
+                const div = document.createElement('div');
+                div.className = 'result-card animate-pulse';
+                div.innerText = promptResult;
+                div.onclick = () => {
+                    copyTextToClipboard(promptResult, () => {
+                        const original = div.innerText; div.innerText = "已複製!"; div.classList.add('text-green-400', 'border-green-500');
+                        setTimeout(() => { div.innerText = original; div.classList.remove('text-green-400', 'border-green-500'); }, 800);
+                    });
+                };
+                setTimeout(() => div.classList.remove('animate-pulse'), 200 + i * 50);
+                resultsContainer.appendChild(div);
+            }
+        }
+
+        function copyTextToClipboard(text, callback) {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            textArea.style.position = "fixed"; textArea.style.left = "-9999px"; textArea.style.top = "0";
+            document.body.appendChild(textArea);
+            textArea.focus(); textArea.select();
+            try { if (document.execCommand('copy') && callback) callback(); } catch (err) { alert('複製失敗'); }
+            document.body.removeChild(textArea);
+        }
+        function updatePreview() { syntaxPreview.value = generateSyntax(); }
+        function copyFullSyntax() { const text = syntaxPreview.value; if(text) copyTextToClipboard(text, () => alert("已複製完整語法！")); }
+        function clickToCopySyntax(el) {
+            const text = syntaxPreview.value; if(!text) return;
+            copyTextToClipboard(text, () => {
+                const feedback = el.querySelector('#copyFeedback span');
+                const originalText = feedback.innerText;
+                feedback.innerText = "COPIED!"; feedback.classList.add('text-green-400');
+                setTimeout(() => { feedback.innerText = originalText; feedback.classList.remove('text-green-400'); }, 1000);
+            });
+        }
+        function formatCount(num) {
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
+            return num;
+        }
+        function resetAll() {
+            if(confirm("確定清空區塊設定？(Tag 資料庫不會被清除)")) {
+                blocks = []; blockIdCounter = 0; renderBlocks(); updatePreview(); saveBlocksToLocalStorage();
+                resultsContainer.innerHTML = '<div class="text-center text-zinc-600 text-xs py-10">等待生成...</div>';
+            }
+        }
+
+        fontSizeSlider.addEventListener('input', (e) => {
+            const size = e.target.value;
+            document.documentElement.style.setProperty('--result-font-size', `${size}px`);
+        });
+
+        init();
+    </script>
+</body>
+</html>
