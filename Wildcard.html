@@ -56,18 +56,18 @@
             background-color: #0f0f10;
         }
         
-        input[type="text"], input[type="number"] {
+        input[type="text"], input[type="number"], textarea, select {
             background: #27272a;
             border: 1px solid #3f3f46;
             color: white;
-            padding: 2px 6px;
+            padding: 4px 8px;
             border-radius: 4px;
             font-family: 'JetBrains Mono', monospace;
             outline: none;
             transition: border-color 0.2s;
             font-size: 12px;
         }
-        input[type="text"]:focus, input[type="number"]:focus {
+        input[type="text"]:focus, input[type="number"]:focus, textarea:focus, select:focus {
             border-color: #3b82f6;
         }
 
@@ -83,6 +83,18 @@
         input.tag-cat-3 { color: #c084fc; }
         input.tag-cat-4 { color: #4ade80; }
         input.tag-cat-5 { color: #fb923c; }
+
+        /* Manager Modal List Item */
+        .manager-item {
+            cursor: pointer;
+            border-bottom: 1px solid #27272a;
+        }
+        .manager-item:hover, .manager-item.active {
+            background-color: #27272a;
+        }
+        .manager-item.active {
+            border-left: 3px solid #3b82f6;
+        }
 
         /* 滑桿樣式 */
         input[type=range] {
@@ -177,7 +189,6 @@
             background-color: #3b82f6;
             color: white;
         }
-        /* Override text colors on hover/active for better contrast */
         .suggestion-item:hover .suggestion-tag, .suggestion-item.active .suggestion-tag { color: white !important; }
         
         .suggestion-tag { font-size: 12px; font-weight: bold; }
@@ -199,6 +210,14 @@
             display: none;
         }
         #loadingOverlay.active {
+            display: flex;
+        }
+
+        /* Tag Manager Modal */
+        #tagManagerModal {
+            display: none;
+        }
+        #tagManagerModal.active {
             display: flex;
         }
 
@@ -251,9 +270,116 @@
             border-bottom-color: #3b82f6;
             color: #fff;
         }
+
+        /* Toast Animation */
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes fadeOut {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(100%); opacity: 0; }
+        }
+        .toast-item {
+            animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .toast-item.hiding {
+            animation: fadeOut 0.3s ease-in forwards;
+        }
     </style>
 </head>
 <body class="flex flex-col h-screen overflow-hidden text-sm">
+
+    <!-- Toast Container (Notification Area) -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-[100] flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- Tag Manager Modal -->
+    <div id="tagManagerModal" class="fixed inset-0 bg-black/80 z-50 items-center justify-center backdrop-blur-sm">
+        <div class="bg-bg-panel border border-zinc-700 w-[90%] max-w-4xl h-[80vh] rounded-lg shadow-2xl flex flex-col overflow-hidden">
+            <!-- Header -->
+            <div class="h-12 bg-zinc-900 border-b border-zinc-700 flex items-center justify-between px-4 shrink-0">
+                <h2 class="text-white font-bold flex items-center gap-2">
+                    <svg class="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path></svg>
+                    標籤資料庫管理器
+                </h2>
+                <button onclick="closeTagManager()" class="text-zinc-500 hover:text-white transition">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <!-- Content -->
+            <div class="flex-1 flex overflow-hidden">
+                <!-- Left: List -->
+                <div class="w-2/5 border-r border-zinc-700 flex flex-col bg-bg-surface/50">
+                    <div class="p-3 border-b border-zinc-700 gap-2 flex flex-col shrink-0">
+                        <button onclick="createNewTagState()" class="w-full bg-green-700 hover:bg-green-600 text-white text-xs font-bold py-2 rounded transition flex items-center justify-center gap-2 shadow-lg shadow-green-900/20">
+                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                             新增標籤
+                        </button>
+                        <input type="text" id="managerSearch" class="w-full" placeholder="搜尋 Tag..." oninput="renderManagerList(this.value)">
+                    </div>
+                    <div id="managerList" class="flex-1 overflow-y-auto custom-scrollbar">
+                        <!-- List Items Injected Here -->
+                    </div>
+                    <div class="p-2 bg-zinc-900 text-[10px] text-zinc-500 text-center border-t border-zinc-800 shrink-0" id="managerStats">
+                        Showing top 50 matches
+                    </div>
+                </div>
+
+                <!-- Right: Editor -->
+                <div class="w-3/5 flex flex-col bg-bg-panel p-6 overflow-y-auto custom-scrollbar">
+                    <div id="managerEditPanel" class="hidden h-full flex flex-col">
+                        <h3 class="text-lg font-bold text-white mb-6 border-b border-zinc-700 pb-2" id="editPanelTitle">編輯標籤</h3>
+                        
+                        <div class="space-y-4 flex-1">
+                            <div>
+                                <label class="block text-xs text-zinc-400 mb-1">Tag 名稱 (Key)</label>
+                                <input type="text" id="editTagName" class="w-full text-base font-bold text-white bg-zinc-800 focus:bg-zinc-700" placeholder="輸入 Tag 名稱 (唯一 ID)">
+                                <p class="text-[10px] text-zinc-500 mt-1">* 這是唯一識別碼，修改此欄位等同於刪除舊 Tag 並建立新 Tag。</p>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs text-zinc-400 mb-1">分類 (Category)</label>
+                                <select id="editTagCat" class="w-full">
+                                    <option value="0">General (一般)</option>
+                                    <option value="1">Artist (繪師)</option>
+                                    <option value="3">Copyright (作品)</option>
+                                    <option value="4">Character (角色)</option>
+                                    <option value="5">Meta (高品質/風格)</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs text-zinc-400 mb-1">使用計數 (Count)</label>
+                                <input type="number" id="editTagCount" class="w-full">
+                            </div>
+
+                            <div>
+                                <label class="block text-xs text-zinc-400 mb-1">別名 (Aliases)</label>
+                                <textarea id="editTagAlias" class="w-full h-24 resize-none leading-relaxed" placeholder="以逗號分隔，例如: girl, josei"></textarea>
+                                <p class="text-[10px] text-zinc-500 mt-1">搜尋時也會比對這裡的文字。</p>
+                            </div>
+                        </div>
+
+                        <div class="mt-8 flex items-center justify-between pt-4 border-t border-zinc-700">
+                            <button id="btnDeleteTag" onclick="deleteTagFromManager()" class="text-red-500 hover:text-red-400 text-xs px-4 py-2 hover:bg-red-500/10 rounded transition">刪除此 Tag</button>
+                            
+                            <div class="flex gap-3 ml-auto">
+                                <button onclick="closeTagManager()" class="px-4 py-2 text-zinc-400 hover:text-white transition text-xs">取消</button>
+                                <button onclick="saveManagerChanges()" class="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded font-bold shadow-lg shadow-blue-900/20 text-xs transition transform active:scale-95">儲存 / 更新</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Empty State for Editor -->
+                    <div id="managerEditEmpty" class="h-full flex flex-col items-center justify-center text-zinc-600 select-none">
+                        <svg class="w-16 h-16 mb-4 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                        <p>請從左側列表選擇一個 Tag 進行編輯，或點擊「新增標籤」</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- 載入中遮罩 -->
     <div id="loadingOverlay" class="fixed inset-0 bg-black/90 z-[60] flex flex-col items-center justify-center backdrop-blur-sm">
@@ -290,10 +416,15 @@
                 <input type="file" id="csvFileInput" accept=".csv" multiple class="hidden" onchange="loadTagsFromCSV(this.files)">
             </label>
 
-            <!-- 新增：導出 CSV 按鈕 -->
             <button onclick="exportToCSV()" class="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded border border-zinc-700 transition group" title="導出當前所有 Tag 為 CSV">
                 <svg class="w-4 h-4 text-blue-500 group-hover:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                 <span class="text-xs text-zinc-300">導出</span>
+            </button>
+            
+            <!-- Manager Button -->
+            <button onclick="openTagManager()" class="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded border border-zinc-700 transition group" title="管理資料庫內容">
+                <svg class="w-4 h-4 text-zinc-400 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path></svg>
+                <span class="text-xs text-zinc-300">管理</span>
             </button>
 
             <span id="tagCountBadge" class="text-[10px] text-zinc-500 font-mono hidden ml-2">0 tags loaded</span>
@@ -463,15 +594,29 @@
         const chartsContainer = document.getElementById('chartsContainer');
         const chartsEmptyState = document.getElementById('chartsEmptyState');
 
+        // Manager Elements
+        const tagManagerModal = document.getElementById('tagManagerModal');
+        const managerList = document.getElementById('managerList');
+        const managerSearch = document.getElementById('managerSearch');
+        const managerEditPanel = document.getElementById('managerEditPanel');
+        const managerEditEmpty = document.getElementById('managerEditEmpty');
+        
+        const editPanelTitle = document.getElementById('editPanelTitle');
+        const editTagName = document.getElementById('editTagName');
+        const editTagCat = document.getElementById('editTagCat');
+        const editTagCount = document.getElementById('editTagCount');
+        const editTagAlias = document.getElementById('editTagAlias');
+        const btnDeleteTag = document.getElementById('btnDeleteTag');
+
         let blocks = [];
         let blockIdCounter = 0;
-        let chartInstances = []; // Keep track of charts to destroy them
-        let currentTab = 'charts'; // Changed default to charts
+        let chartInstances = []; 
+        let currentTab = 'charts'; 
         
+        let editingTagOriginalKey = null; // Track which tag is being edited in manager (null if new)
+
         // ==========================================
         //  設定區：自動載入同層 CSV
-        //  若檔案在 GitHub 同層目錄，請將檔名加入此陣列
-        //  例如: ['tags.csv', 'artists.csv']
         // ==========================================
         const PRELOAD_CSV_URLS = [
              'wildcards/data.csv', 
@@ -479,9 +624,7 @@
         ];
 
         // ==========================================
-        //  BUILT-IN DATABASE (With Categories)
-        //  Format: [Tag, Category, Count, Alias]
-        //  Category: 0=General, 1=Artist, 3=Copyright, 4=Character, 5=Meta
+        //  BUILT-IN DATABASE
         // ==========================================
         const rawTagData = [
             ["1girl", 0, 4974288, "女の子,女性,少女,girl,animegirl"],
@@ -562,9 +705,72 @@
             });
         }
         
-        // ==========================================
-        //  修改後的 Clear Database (不重整網頁)
-        // ==========================================
+        // 單一 Tag 更新 (for Manager)
+        async function updateSingleTagInDB(tagObj) {
+            if (!db) await initDB();
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([STORE_NAME], 'readwrite');
+                const store = transaction.objectStore(STORE_NAME);
+                const req = store.put(tagObj);
+                req.onsuccess = () => resolve();
+                req.onerror = (e) => reject(e);
+            });
+        }
+
+        async function deleteTagFromDB(tagKey) {
+            if (!db) await initDB();
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([STORE_NAME], 'readwrite');
+                const store = transaction.objectStore(STORE_NAME);
+                const req = store.delete(tagKey);
+                req.onsuccess = () => resolve();
+                req.onerror = (e) => reject(e);
+            });
+        }
+        
+        // --- Toast Notification System ---
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            
+            // Create Element
+            const el = document.createElement('div');
+            el.className = 'toast-item pointer-events-auto min-w-[200px] max-w-[320px] p-3 rounded-lg shadow-xl border-l-4 text-xs font-mono text-white flex items-start gap-3 bg-zinc-800 backdrop-blur-md border-zinc-700';
+            
+            // Type Styling
+            let icon = '';
+            if (type === 'success') {
+                el.classList.add('border-green-500');
+                icon = '<svg class="w-4 h-4 text-green-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>';
+            } else if (type === 'error') {
+                el.classList.add('border-red-500');
+                icon = '<svg class="w-4 h-4 text-red-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>';
+            } else if (type === 'warning') {
+                el.classList.add('border-yellow-500');
+                icon = '<svg class="w-4 h-4 text-yellow-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>';
+            } else {
+                el.classList.add('border-blue-500');
+                icon = '<svg class="w-4 h-4 text-blue-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
+            }
+
+            el.innerHTML = `
+                ${icon}
+                <div class="flex-1 leading-relaxed">${message.replace(/\n/g, '<br>')}</div>
+                <button class="text-zinc-500 hover:text-white transition shrink-0" onclick="this.parentElement.classList.add('hiding'); setTimeout(() => this.parentElement.remove(), 300);">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            `;
+
+            container.appendChild(el);
+
+            // Auto Remove
+            setTimeout(() => {
+                if(el && el.parentElement) {
+                    el.classList.add('hiding');
+                    setTimeout(() => { if(el.parentElement) el.remove(); }, 300);
+                }
+            }, 4000);
+        }
+
         async function clearDatabase() {
             if(!confirm("確定要清除快取資料嗎？\n這將刪除所有匯入的 Tag，還原至初始狀態。")) return;
             
@@ -574,78 +780,54 @@
             const request = objectStore.clear();
 
             request.onsuccess = () => {
-                // 1. 重置內存變數 tagDB 為原始內建資料
                 tagDB = [];
-                
-                // 2. 更新 UI 顯示
                 updateTagCountDisplay();
-                tagCountBadge.innerText = `Built-in: ${tagDB.length} tags`; // 強制更新文字
-                
-                // 3. 隱藏清除按鈕 (因為已經清空了)
+                tagCountBadge.innerText = `Built-in: ${tagDB.length} tags`; 
                 clearDbBtn.classList.add('hidden');
                 clearDbBtn.innerText = '';
-
-                // 4. 清空搜尋建議 (避免殘留)
                 hideSuggestions();
-
-                alert("快取已清除！資料已還原為內建預設值，無需重新整理。");
+                showToast("快取已清除！資料已還原為內建預設值。", 'success');
             };
 
             request.onerror = (e) => {
                 console.error("Clear failed:", e);
-                alert("清除失敗，請查看 Console 錯誤訊息。");
+                showToast("清除失敗，請查看 Console 錯誤訊息。", 'error');
             };
         }
 
-        // ==========================================
-        //  新增：導出 CSV 功能 (含 BOM 修正)
-        // ==========================================
         function exportToCSV() {
             if (!tagDB || tagDB.length === 0) {
-                alert("目前沒有任何 Tag 資料可供導出。");
+                showToast("目前沒有任何 Tag 資料可供導出。", 'warning');
                 return;
             }
 
             loadingOverlay.classList.add('active');
             loadingText.innerText = "正在建立 CSV 檔案...";
 
-            // 使用 setTimeout 讓 UI 有時間顯示 Loading 畫面
             setTimeout(() => {
                 try {
-                    // 1. 建立 CSV 標頭
                     let csvContent = "tag,category,count,aliases\n";
-
-                    // 2. 組合內容
                     tagDB.forEach(item => {
-                        // 處理 alias 中的逗號或引號，避免 CSV 格式錯誤
                         let safeAlias = item.a || "";
                         if (safeAlias.includes(",") || safeAlias.includes('"')) {
                             safeAlias = `"${safeAlias.replace(/"/g, '""')}"`;
                         }
                         csvContent += `${item.t},${item.cat || 0},${item.c || 0},${safeAlias}\n`;
                     });
-
-                    // 3. 建立 Blob 物件 (加入 \uFEFF BOM 以解決 Excel 中文亂碼)
                     const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
                     const url = URL.createObjectURL(blob);
-                    
-                    // 4. 建立下載連結並觸發
                     const link = document.createElement("a");
                     const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
                     link.setAttribute("href", url);
                     link.setAttribute("download", `tags_export_${dateStr}.csv`);
                     link.style.visibility = 'hidden';
-                    
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
-                    
-                    // 釋放記憶體
                     URL.revokeObjectURL(url);
-
                 } catch (e) {
                     console.error("Export failed:", e);
-                    alert("導出失敗，請查看 Console。");
+                    showToast("導出失敗，請查看 Console。", 'error');
                 } finally {
                     loadingOverlay.classList.remove('active');
                 }
@@ -681,16 +863,12 @@
             return false;
         }
 
-        // 新增：載入遠端 CSV 的函數
         async function loadRemoteCSVFiles() {
             if (PRELOAD_CSV_URLS.length === 0) return;
-            
-            // 檢查是否在本地 file 協議運行
             if (window.location.protocol === 'file:') {
-                console.warn("警告：偵測到您正在使用 file:// 協議。瀏覽器可能會因 CORS 安全策略阻止讀取同層 CSV。建議使用 GitHub Pages 或本地伺服器。");
+                console.warn("警告：偵測到 file:// 協議，可能無法自動載入 CSV。");
             }
 
-            // 顯示載入狀態
             const originalText = loadingText.innerText;
             loadingOverlay.classList.add('active');
             loadingText.innerText = "正在從伺服器自動載入 CSV...";
@@ -701,10 +879,7 @@
                         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
                         return res.text();
                     })
-                    .then(text => {
-                        console.log(`Loaded remote CSV: ${url}`);
-                        return parseCSVContent(text);
-                    })
+                    .then(text => parseCSVContent(text))
                     .catch(e => {
                         console.error(`Failed to load ${url}:`, e);
                         return [];
@@ -717,22 +892,13 @@
                 
                 if (allRemoteTags.length > 0) {
                     const tagMap = new Map();
-                    // 先載入現有的
                     tagDB.forEach(t => tagMap.set(t.t, t));
-                    // 覆蓋/新增遠端的
                     allRemoteTags.forEach(t => tagMap.set(t.t, t));
-                    
                     tagDB = Array.from(tagMap.values()).sort((a, b) => b.c - a.c);
-                    
-                    // 存回資料庫
                     await saveTagsToDB(tagDB);
-                    
-                    // 更新 UI
                     updateTagCountDisplay();
                     clearDbBtn.classList.remove('hidden');
                     clearDbBtn.innerText = `清除快取 (${formatCount(tagDB.length)})`;
-                    
-                    console.log(`Auto-loaded ${allRemoteTags.length} tags from remote files.`);
                 }
             } catch (err) {
                 console.error("Error processing remote CSVs:", err);
@@ -750,10 +916,7 @@
                     updateTagCountDisplay();
                     tagCountBadge.innerText = `Built-in: ${tagDB.length} tags`;
                 }
-                
-                // 嘗試載入設定的遠端 CSV
                 await loadRemoteCSVFiles();
-
             } catch (e) { console.error("DB Init failed:", e); updateTagCountDisplay(); }
 
             const loaded = loadBlocksFromLocalStorage();
@@ -764,11 +927,7 @@
                 addTagToBlock(firstBlockId, "blue", 5);
                 addTagToBlock(firstBlockId, "1girl", 10);
             }
-
-            // Force render charts initially since it's the default tab
-            if (currentTab === 'charts') {
-                renderCharts();
-            }
+            if (currentTab === 'charts') renderCharts();
         }
 
         // CSV Logic
@@ -802,7 +961,7 @@
 
             await Promise.all(promises);
 
-            if (fileCount === 0) { loadingOverlay.classList.remove('active'); alert("未偵測到有效的 .csv"); return; }
+            if (fileCount === 0) { loadingOverlay.classList.remove('active'); showToast("未偵測到有效的 .csv", 'warning'); return; }
 
             tagDB = Array.from(tagMap.values()).sort((a, b) => b.c - a.c);
             
@@ -810,14 +969,14 @@
                 try {
                     await saveTagsToDB(tagDB);
                     loadingOverlay.classList.remove('active');
-                    alert(`成功匯入！\n共 ${tagDB.length} 個標籤已儲存。`);
+                    showToast(`成功匯入！\n共 ${tagDB.length} 個標籤已儲存。`, 'success');
                     updateTagCountDisplay();
                     clearDbBtn.classList.remove('hidden');
                     clearDbBtn.innerText = `清除快取 (${formatCount(tagDB.length)})`;
                 } catch (e) {
                     loadingOverlay.classList.remove('active');
                     console.error(e);
-                    alert("儲存錯誤，但本次操作仍有效。");
+                    showToast("儲存錯誤，但本次操作仍有效。", 'warning');
                     updateTagCountDisplay();
                 }
             }, 100);
@@ -920,7 +1079,7 @@
             updateProbabilitiesDisplay(blockId);
             updatePreview();
             saveBlocksToLocalStorage();
-            if(currentTab === 'charts') renderCharts(); // Debounce this ideally, but simplicity first
+            if(currentTab === 'charts') renderCharts(); 
         }
 
         function removeTag(blockId, tagId) {
@@ -965,9 +1124,7 @@
                 titleInput.value = block.title;
                 titleInput.oninput = (e) => updateBlockTitle(block.id, e.target.value);
                 
-                // Header Button (Retained)
                 card.querySelector('.add-tag-btn').onclick = () => addTagToBlock(block.id);
-                // Bottom Button (New)
                 card.querySelector('.add-tag-bottom-btn').onclick = () => addTagToBlock(block.id);
                 
                 card.querySelector('.delete-block-btn').onclick = () => removeBlock(block.id);
@@ -1062,7 +1219,6 @@
         }
 
         function renderCharts() {
-            // Cleanup old charts
             chartInstances.forEach(c => c.destroy());
             chartInstances = [];
             chartsContainer.innerHTML = '';
@@ -1077,17 +1233,14 @@
             }
 
             activeBlocks.forEach(block => {
-                // Wrapper
                 const wrapper = document.createElement('div');
                 wrapper.className = 'bg-zinc-900 rounded-lg p-4 border border-zinc-800';
                 
-                // Header
                 const title = document.createElement('h3');
                 title.className = 'text-xs font-bold text-zinc-400 mb-4 text-center';
                 title.innerText = block.title || `Block #${block.id}`;
                 wrapper.appendChild(title);
                 
-                // Canvas Container
                 const canvasContainer = document.createElement('div');
                 canvasContainer.style.position = 'relative';
                 canvasContainer.style.height = '200px';
@@ -1098,12 +1251,10 @@
                 wrapper.appendChild(canvasContainer);
                 chartsContainer.appendChild(wrapper);
 
-                // Prepare Data
                 const labels = block.tags.map(t => t.text || '(Empty)');
                 const data = block.tags.map(t => t.weight);
                 const colors = block.tags.map(t => getCategoryColor(t.cat));
                 
-                // Create Chart
                 const ctx = canvas.getContext('2d');
                 const chart = new Chart(ctx, {
                     type: 'pie',
@@ -1292,11 +1443,22 @@
             textArea.style.position = "fixed"; textArea.style.left = "-9999px"; textArea.style.top = "0";
             document.body.appendChild(textArea);
             textArea.focus(); textArea.select();
-            try { if (document.execCommand('copy') && callback) callback(); } catch (err) { alert('複製失敗'); }
+            try { 
+                if (document.execCommand('copy')) {
+                    if(callback) callback(); 
+                } else {
+                    showToast("複製失敗", 'error');
+                }
+            } catch (err) { 
+                showToast("複製失敗", 'error'); 
+            }
             document.body.removeChild(textArea);
         }
         function updatePreview() { syntaxPreview.value = generateSyntax(); }
-        function copyFullSyntax() { const text = syntaxPreview.value; if(text) copyTextToClipboard(text, () => alert("已複製完整語法！")); }
+        function copyFullSyntax() { 
+            const text = syntaxPreview.value; 
+            if(text) copyTextToClipboard(text, () => showToast("已複製完整語法！", 'success')); 
+        }
         function clickToCopySyntax(el) {
             const text = syntaxPreview.value; if(!text) return;
             copyTextToClipboard(text, () => {
@@ -1322,6 +1484,225 @@
             const size = e.target.value;
             document.documentElement.style.setProperty('--result-font-size', `${size}px`);
         });
+        
+        // ==========================================
+        //  Tag Manager Logic (NEW)
+        // ==========================================
+        function openTagManager() {
+            tagManagerModal.classList.add('active');
+            renderManagerList('');
+            managerSearch.focus();
+            document.body.style.overflow = 'hidden'; // prevent bg scrolling
+        }
+
+        function closeTagManager() {
+            tagManagerModal.classList.remove('active');
+            document.body.style.overflow = '';
+            // Clear edit state
+            managerEditPanel.classList.add('hidden');
+            managerEditEmpty.classList.remove('hidden');
+            editingTagOriginalKey = null;
+            // Refresh main UI counts
+            updateTagCountDisplay();
+            // Re-render blocks to update colors if categories changed
+            renderBlocks();
+            if(currentTab === 'charts') renderCharts();
+        }
+
+        // Close on escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && tagManagerModal.classList.contains('active')) {
+                closeTagManager();
+            }
+        });
+
+        function renderManagerList(query) {
+            const lowerQuery = query.toLowerCase();
+            // Filter
+            const matches = tagDB.filter(item => {
+                return item.t.toLowerCase().includes(lowerQuery) || (item.a && item.a.toLowerCase().includes(lowerQuery));
+            });
+
+            // Limit display for performance
+            const limit = 50;
+            const displayItems = matches.slice(0, limit);
+            
+            managerList.innerHTML = '';
+            
+            if (displayItems.length === 0) {
+                managerList.innerHTML = '<div class="text-center text-zinc-500 py-4 text-xs">沒有找到符合的標籤</div>';
+                document.getElementById('managerStats').innerText = '';
+                return;
+            }
+
+            displayItems.forEach(tag => {
+                const el = document.createElement('div');
+                el.className = 'manager-item p-2 flex items-center justify-between text-xs';
+                if(editingTagOriginalKey === tag.t) el.classList.add('active');
+                
+                const catClass = `tag-cat-${tag.cat !== undefined ? tag.cat : 0}`;
+                
+                el.innerHTML = `
+                    <div class="flex flex-col truncate mr-2">
+                        <span class="font-bold ${catClass}">${tag.t}</span>
+                        <span class="text-zinc-500 text-[10px] truncate">${tag.a || '-'}</span>
+                    </div>
+                    <span class="text-zinc-600 font-mono text-[10px] bg-zinc-800 px-1 rounded">${formatCount(tag.c)}</span>
+                `;
+                
+                el.onclick = () => selectTagForEdit(tag);
+                managerList.appendChild(el);
+            });
+
+            document.getElementById('managerStats').innerText = `Showing ${displayItems.length} of ${matches.length} matches (Total: ${tagDB.length})`;
+        }
+        
+        // NEW: Create State
+        function createNewTagState() {
+            editingTagOriginalKey = null; // New Mode
+            
+            // Reset UI
+            managerEditEmpty.classList.add('hidden');
+            managerEditPanel.classList.remove('hidden');
+            
+            editPanelTitle.innerText = "新增標籤";
+            editTagName.value = "";
+            editTagCat.value = 0;
+            editTagCount.value = 0;
+            editTagAlias.value = "";
+            
+            btnDeleteTag.classList.add('hidden'); // Hide Delete button for new tags
+            
+            // Remove active class from list
+            const activeItems = managerList.querySelectorAll('.active');
+            activeItems.forEach(el => el.classList.remove('active'));
+            
+            editTagName.focus();
+        }
+
+        function selectTagForEdit(tagObj) {
+            editingTagOriginalKey = tagObj.t;
+            
+            managerEditEmpty.classList.add('hidden');
+            managerEditPanel.classList.remove('hidden');
+            btnDeleteTag.classList.remove('hidden'); // Show delete button
+            
+            editPanelTitle.innerText = "編輯標籤";
+            editTagName.value = tagObj.t;
+            editTagCat.value = tagObj.cat || 0;
+            editTagCount.value = tagObj.c || 0;
+            editTagAlias.value = tagObj.a || '';
+            
+            // Re-render list to show active state
+            renderManagerList(managerSearch.value);
+        }
+
+        async function saveManagerChanges() {
+            const newKey = editTagName.value.trim();
+            if (!newKey) { showToast("Tag 名稱不能為空", 'error'); return; }
+            
+            const newCat = parseInt(editTagCat.value);
+            const newCount = parseInt(editTagCount.value);
+            const newAlias = editTagAlias.value.trim();
+            
+            const newTagObj = { t: newKey, cat: newCat, c: newCount, a: newAlias };
+            
+            try {
+                // 1. Create New Mode
+                if (editingTagOriginalKey === null) {
+                    // Check existence
+                    if (tagDB.some(t => t.t === newKey)) {
+                        showToast("此 Tag 名稱已存在，請使用編輯功能。", 'warning');
+                        return;
+                    }
+                    
+                    // Add to DB
+                    await updateSingleTagInDB(newTagObj);
+                    // Add to Array
+                    tagDB.push(newTagObj);
+                    tagDB.sort((a, b) => b.c - a.c);
+                    
+                    // Set as editing
+                    editingTagOriginalKey = newKey;
+                    btnDeleteTag.classList.remove('hidden');
+                    editPanelTitle.innerText = "編輯標籤";
+                }
+                // 2. Edit Mode (Rename)
+                else if (newKey !== editingTagOriginalKey) {
+                    // Check if new key already exists
+                     if (tagDB.some(t => t.t === newKey)) {
+                        if(!confirm(`Tag名稱 "${newKey}" 已存在。確定要覆蓋它嗎？這將刪除舊的 "${editingTagOriginalKey}"。`)) return;
+                    } else {
+                         if(!confirm(`確定將 Tag 名稱從 "${editingTagOriginalKey}" 變更為 "${newKey}" 嗎？\n(這將刪除舊 Tag 並建立新 Tag)`)) return;
+                    }
+                    
+                    // Delete Old
+                    await deleteTagFromDB(editingTagOriginalKey);
+                    // Add New
+                    await updateSingleTagInDB(newTagObj);
+                    
+                    // Update Array: Remove old, add new
+                    tagDB = tagDB.filter(t => t.t !== editingTagOriginalKey && t.t !== newKey);
+                    tagDB.push(newTagObj);
+                    tagDB.sort((a, b) => b.c - a.c);
+                    
+                    editingTagOriginalKey = newKey;
+                } 
+                // 3. Edit Mode (Same Key, Just updating props)
+                else {
+                    const index = tagDB.findIndex(t => t.t === editingTagOriginalKey);
+                    if (index !== -1) {
+                         tagDB[index] = newTagObj;
+                         await updateSingleTagInDB(newTagObj);
+                    }
+                }
+
+                // Show feedback
+                const btn = document.querySelector('#managerEditPanel button.bg-blue-600');
+                const originalText = btn.innerText;
+                btn.innerText = "已儲存！";
+                btn.classList.add('bg-green-600');
+                setTimeout(() => {
+                    btn.innerText = originalText;
+                    btn.classList.remove('bg-green-600');
+                }, 1000);
+                
+                // Refresh list display
+                // NEW: Update search to the new key so it shows up immediately
+                managerSearch.value = newKey;
+                renderManagerList(newKey);
+                
+            } catch (e) {
+                console.error(e);
+                showToast("儲存失敗: " + e.message, 'error');
+            }
+        }
+
+        async function deleteTagFromManager() {
+            if (!editingTagOriginalKey) return;
+            if (!confirm(`確定要永久刪除 "${editingTagOriginalKey}" 嗎？`)) return;
+            
+            try {
+                // Delete from DB
+                await deleteTagFromDB(editingTagOriginalKey);
+                
+                // Remove from Array
+                tagDB = tagDB.filter(t => t.t !== editingTagOriginalKey);
+                
+                // Clear Form
+                managerEditPanel.classList.add('hidden');
+                managerEditEmpty.classList.remove('hidden');
+                editingTagOriginalKey = null;
+                
+                // Refresh List
+                renderManagerList(managerSearch.value);
+                
+                showToast("標籤已刪除", 'success');
+            } catch (e) {
+                console.error(e);
+                showToast("刪除失敗", 'error');
+            }
+        }
 
         init();
     </script>
