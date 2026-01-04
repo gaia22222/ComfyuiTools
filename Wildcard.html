@@ -278,20 +278,27 @@
 
     <!-- 頂部列 -->
     <header class="h-12 bg-bg-panel border-b border-zinc-800 flex items-center justify-between px-4 shrink-0 z-30">
-        <div class="flex items-center gap-3">
-            <div class="flex items-center gap-2 text-zinc-100 font-bold tracking-wide">
+        <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 text-zinc-100 font-bold tracking-wide mr-2">
                 <svg class="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg>
                 Weighted Prompt Studio
             </div>
             
             <label class="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded cursor-pointer border border-zinc-700 transition group" title="可選擇多個檔案，會累加至現有資料">
                 <svg class="w-4 h-4 text-green-500 group-hover:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
-                <span class="text-xs text-zinc-300">匯入 CSV</span>
+                <span class="text-xs text-zinc-300">匯入</span>
                 <input type="file" id="csvFileInput" accept=".csv" multiple class="hidden" onchange="loadTagsFromCSV(this.files)">
             </label>
-            <span id="tagCountBadge" class="text-[10px] text-zinc-500 font-mono hidden">0 tags loaded</span>
+
+            <!-- 新增：導出 CSV 按鈕 -->
+            <button onclick="exportToCSV()" class="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded border border-zinc-700 transition group" title="導出當前所有 Tag 為 CSV">
+                <svg class="w-4 h-4 text-blue-500 group-hover:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                <span class="text-xs text-zinc-300">導出</span>
+            </button>
+
+            <span id="tagCountBadge" class="text-[10px] text-zinc-500 font-mono hidden ml-2">0 tags loaded</span>
             
-            <button onclick="clearDatabase()" class="text-[10px] text-red-500 hover:text-red-400 underline hidden" id="clearDbBtn">清除快取資料</button>
+            <button onclick="clearDatabase()" class="text-[10px] text-red-500 hover:text-red-400 underline hidden ml-2" id="clearDbBtn">清除快取資料</button>
         </div>
         
         <div class="flex items-center gap-4">
@@ -401,7 +408,7 @@
     <!-- 自動完成選單容器 (全域) -->
     <div id="suggestionBox"></div>
 
-    <!-- Template for Block (Updated with bottom button) -->
+    <!-- Template for Block -->
     <template id="blockTemplate">
         <div class="block-card p-3 relative group" data-id="">
             <!-- 區塊標題列 -->
@@ -468,6 +475,7 @@
         // ==========================================
         const PRELOAD_CSV_URLS = [
              'wildcards/data.csv', 
+             'wildcards/danbooru_tagsw.csv'
         ];
 
         // ==========================================
@@ -493,7 +501,7 @@
         ];
         
         // 初始化標籤庫
-        let tagDB = rawTagData.map(item => ({ t: item[0], cat: item[1], c: item[2], a: item[3] }));
+        let tagDB = [];
 
         // DB Setup
         const DB_NAME = 'PromptStudioDB';
@@ -501,7 +509,7 @@
         const DB_VERSION = 2; 
         let db;
 
-        // ... (Database Logic Same as before)
+        // ... (Database Logic)
         function initDB() {
             return new Promise((resolve, reject) => {
                 const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -554,15 +562,94 @@
             });
         }
         
+        // ==========================================
+        //  修改後的 Clear Database (不重整網頁)
+        // ==========================================
         async function clearDatabase() {
-            if(!confirm("確定要清除快取資料嗎？")) return;
+            if(!confirm("確定要清除快取資料嗎？\n這將刪除所有匯入的 Tag，還原至初始狀態。")) return;
+            
             if (!db) await initDB();
             const transaction = db.transaction([STORE_NAME], 'readwrite');
-            transaction.objectStore(STORE_NAME).clear();
-            transaction.oncomplete = () => {
-                alert("已清除快取，網頁將重新整理。");
-                location.reload();
+            const objectStore = transaction.objectStore(STORE_NAME);
+            const request = objectStore.clear();
+
+            request.onsuccess = () => {
+                // 1. 重置內存變數 tagDB 為原始內建資料
+                tagDB = [];
+                
+                // 2. 更新 UI 顯示
+                updateTagCountDisplay();
+                tagCountBadge.innerText = `Built-in: ${tagDB.length} tags`; // 強制更新文字
+                
+                // 3. 隱藏清除按鈕 (因為已經清空了)
+                clearDbBtn.classList.add('hidden');
+                clearDbBtn.innerText = '';
+
+                // 4. 清空搜尋建議 (避免殘留)
+                hideSuggestions();
+
+                alert("快取已清除！資料已還原為內建預設值，無需重新整理。");
             };
+
+            request.onerror = (e) => {
+                console.error("Clear failed:", e);
+                alert("清除失敗，請查看 Console 錯誤訊息。");
+            };
+        }
+
+        // ==========================================
+        //  新增：導出 CSV 功能 (含 BOM 修正)
+        // ==========================================
+        function exportToCSV() {
+            if (!tagDB || tagDB.length === 0) {
+                alert("目前沒有任何 Tag 資料可供導出。");
+                return;
+            }
+
+            loadingOverlay.classList.add('active');
+            loadingText.innerText = "正在建立 CSV 檔案...";
+
+            // 使用 setTimeout 讓 UI 有時間顯示 Loading 畫面
+            setTimeout(() => {
+                try {
+                    // 1. 建立 CSV 標頭
+                    let csvContent = "tag,category,count,aliases\n";
+
+                    // 2. 組合內容
+                    tagDB.forEach(item => {
+                        // 處理 alias 中的逗號或引號，避免 CSV 格式錯誤
+                        let safeAlias = item.a || "";
+                        if (safeAlias.includes(",") || safeAlias.includes('"')) {
+                            safeAlias = `"${safeAlias.replace(/"/g, '""')}"`;
+                        }
+                        csvContent += `${item.t},${item.cat || 0},${item.c || 0},${safeAlias}\n`;
+                    });
+
+                    // 3. 建立 Blob 物件 (加入 \uFEFF BOM 以解決 Excel 中文亂碼)
+                    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const url = URL.createObjectURL(blob);
+                    
+                    // 4. 建立下載連結並觸發
+                    const link = document.createElement("a");
+                    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+                    link.setAttribute("href", url);
+                    link.setAttribute("download", `tags_export_${dateStr}.csv`);
+                    link.style.visibility = 'hidden';
+                    
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    
+                    // 釋放記憶體
+                    URL.revokeObjectURL(url);
+
+                } catch (e) {
+                    console.error("Export failed:", e);
+                    alert("導出失敗，請查看 Console。");
+                } finally {
+                    loadingOverlay.classList.remove('active');
+                }
+            }, 100);
         }
 
         function saveBlocksToLocalStorage() {
