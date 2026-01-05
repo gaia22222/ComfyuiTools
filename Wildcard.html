@@ -1342,9 +1342,17 @@
 
         blocksContainer.addEventListener('input', function(e) {
             if (e.target.dataset.type === 'tag-input') {
-                const val = e.target.value.trim();
+                const fullVal = e.target.value;
+                // CHANGED: Support CSV style input
+                // Split by comma to get the last segment
+                const parts = fullVal.split(','); 
+                const lastSegment = parts[parts.length - 1];
+                const query = lastSegment.trim();
+                
                 activeInput = e.target;
-                if (val.length >= 1) showSuggestions(val, activeInput);
+                
+                // Check length of the QUERY, not the full string
+                if (query.length >= 1) showSuggestions(query, activeInput);
                 else hideSuggestions();
             }
         });
@@ -1436,11 +1444,27 @@
         }
 
         function hideSuggestions() { suggestionBox.style.display = 'none'; currentSuggestionIndex = -1; currentSuggestions = []; }
+        
         function applySuggestion(tag) {
             if (activeInput) {
-                activeInput.value = tag;
+                // CHANGED: Append to last comma segment instead of replace all
+                const fullVal = activeInput.value;
+                const lastCommaIndex = fullVal.lastIndexOf(',');
+                
+                let newValue;
+                if (lastCommaIndex !== -1) {
+                    // Keep content before the last comma
+                    // Add space for standard formatting "tag1, tag2"
+                    newValue = fullVal.substring(0, lastCommaIndex + 1) + " " + tag;
+                } else {
+                    newValue = tag;
+                }
+                
+                activeInput.value = newValue;
+                // Dispatch change event to update underlying data model
                 activeInput.dispatchEvent(new Event('change', { bubbles: true }));
-                hideSuggestions(); activeInput.focus();
+                hideSuggestions(); 
+                activeInput.focus();
             }
         }
 
