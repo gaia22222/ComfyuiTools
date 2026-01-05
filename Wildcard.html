@@ -71,19 +71,6 @@
             border-color: #3b82f6;
         }
 
-        /* Tag Colors (Danbooru Style) */
-        .tag-cat-0 { color: #60a5fa; } /* General - Blue */
-        .tag-cat-1 { color: #f87171; } /* Artist - Red */
-        .tag-cat-3 { color: #c084fc; } /* Copyright - Purple */
-        .tag-cat-4 { color: #4ade80; } /* Character - Green */
-        .tag-cat-5 { color: #fb923c; } /* Meta - Orange */
-        
-        input.tag-cat-0 { color: #60a5fa; }
-        input.tag-cat-1 { color: #f87171; }
-        input.tag-cat-3 { color: #c084fc; }
-        input.tag-cat-4 { color: #4ade80; }
-        input.tag-cat-5 { color: #fb923c; }
-
         /* Manager Modal List Item */
         .manager-item {
             cursor: pointer;
@@ -96,36 +83,61 @@
             border-left: 3px solid #3b82f6;
         }
 
-        /* 滑桿樣式 */
-        input[type=range] {
+        /* === 權重滑桿樣式 (Segmented Power Bar) === */
+        .weight-slider {
             -webkit-appearance: none;
-            background: transparent;
-            height: 16px;
-            cursor: pointer;
-        }
-        input[type=range]::-webkit-slider-runnable-track {
+            appearance: none;
             width: 100%;
-            height: 4px;
-            background: #3f3f46;
-            border-radius: 2px;
-            transition: background 0.2s;
+            height: 14px;
+            background: transparent;
+            cursor: pointer;
+            border-radius: 3px;
+            position: relative;
+            outline: none;
+            margin: 0;
+            padding: 0;
         }
-        input[type=range]::-webkit-slider-thumb {
+
+        .weight-slider::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 14px;
+            border-radius: 3px;
+            border: 1px solid #3f3f46;
+            background-image: 
+                repeating-linear-gradient(90deg, 
+                    transparent 0, 
+                    transparent calc(10% - 1px), 
+                    rgba(9, 9, 11, 0.8) calc(10% - 1px), 
+                    rgba(9, 9, 11, 0.8) 10%
+                ),
+                linear-gradient(to right, 
+                    var(--fill-color, #3b82f6) 0%, 
+                    var(--fill-color, #3b82f6) var(--percent, 10%), 
+                    #18181b var(--percent, 10%), 
+                    #18181b 100%
+                );
+        }
+
+        .weight-slider::-webkit-slider-thumb {
             -webkit-appearance: none;
-            height: 12px;
-            width: 12px;
-            border-radius: 50%;
-            background: #d4d4d8;
-            margin-top: -4px;
-            transition: transform 0.1s, background 0.2s;
+            appearance: none;
+            height: 14px;
+            width: 10%; 
+            background: transparent;
+            cursor: pointer;
+            border: none;
         }
-        input[type=range]::-webkit-slider-thumb:hover {
-            transform: scale(1.2);
-            background: #fff;
+
+        .weight-slider::-moz-range-thumb {
+            height: 14px;
+            width: 10%;
+            background: transparent;
+            cursor: pointer;
+            border: none;
         }
-        .weight-slider:hover::-webkit-slider-runnable-track {
-            background: #52525b;
-        }
+        
+        .weight-slider:hover { opacity: 0.95; }
+        .weight-slider:active { opacity: 1; }
 
         /* 機率條 */
         .prob-bar-container {
@@ -194,7 +206,7 @@
         .suggestion-tag { font-size: 12px; font-weight: bold; }
         .suggestion-meta { font-size: 10px; color: #a1a1aa; display: flex; justify-content: space-between; }
         .suggestion-item:hover .suggestion-meta, .suggestion-item.active .suggestion-meta { color: #dbeafe; }
-        .match-highlight { text-decoration: underline; opacity: 0.8; }
+        .match-highlight { text-decoration: underline; opacity: 0.8; background-color: rgba(255, 255, 255, 0.1); }
 
         /* 拖曳遮罩 */
         #dragOverlay {
@@ -474,16 +486,20 @@
             
             <!-- 1. 語法預覽區域 -->
             <div class="p-3 bg-zinc-900 border-b border-zinc-800 shrink-0">
-                <div class="flex justify-between items-center mb-1">
-                    <span class="text-[10px] font-bold text-zinc-500 uppercase">目前組合語法 (點擊複製)</span>
-                    <span id="saveStatus" class="text-[10px] text-zinc-600 transition-colors">區塊已自動儲存</span>
-                </div>
-                <div class="relative group cursor-pointer" onclick="clickToCopySyntax(this)" title="點擊複製內容">
-                    <textarea id="syntaxPreview" readonly class="w-full h-24 bg-black/30 border border-zinc-800 rounded p-2 text-[10px] font-mono text-zinc-400 resize-none outline-none focus:border-zinc-700 custom-scrollbar pointer-events-none"></textarea>
-                    <div id="copyFeedback" class="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                         <span class="text-white text-xs font-bold drop-shadow-md">點擊複製</span>
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-[10px] font-bold text-zinc-500 uppercase">目前組合語法</span>
+                    
+                    <div class="flex gap-2 items-center">
+                        <span id="saveStatus" class="text-[10px] text-zinc-600 transition-colors mr-1">區塊已儲存</span>
+                        <!-- 複製按鈕 (放大) -->
+                        <button onclick="clickToCopySyntax()" class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded shadow shadow-blue-900/20 transition font-bold flex items-center gap-1">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path></svg>
+                            複製
+                        </button>
                     </div>
                 </div>
+                
+                <textarea id="syntaxPreview" oninput="debouncedApplySyntax()" class="w-full h-24 bg-black/30 border border-zinc-800 rounded p-2 text-[10px] font-mono text-zinc-300 resize-none outline-none focus:border-zinc-700 focus:bg-black/50 custom-scrollbar transition placeholder-zinc-700" placeholder="可在此編輯語法 (例如 {1::red|2::blue})，輸入完成後將自動更新左側區塊..."></textarea>
             </div>
 
             <!-- Tab Header (預設 Chart active) -->
@@ -612,6 +628,7 @@
         let blockIdCounter = 0;
         let chartInstances = []; 
         let currentTab = 'charts'; 
+        let debounceTimer; // Timer for auto-sync
         
         let editingTagOriginalKey = null; // Track which tag is being edited in manager (null if new)
 
@@ -1058,22 +1075,46 @@
             if(currentTab === 'charts') renderCharts();
         }
 
+        // Helper: Get Color based on weight (1-10)
+        function getWeightColor(weight) {
+            if (weight >= 9) return '#f87171'; // Red (High)
+            if (weight >= 7) return '#fb923c'; // Orange
+            if (weight >= 4) return '#4ade80'; // Green (Medium)
+            return '#3b82f6'; // Blue (Low)
+        }
+        
+        // Helper: Chart Palette (Auto coloring instead of category based)
+        const chartPalette = [
+            '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', 
+            '#ec4899', '#06b6d4', '#84cc16', '#6366f1', '#d946ef',
+            '#64748b', '#f43f5e', '#22c55e', '#eab308', '#a855f7'
+        ];
+        function getAutoColor(index) {
+            return chartPalette[index % chartPalette.length];
+        }
+
         function updateTag(blockId, tagId, field, value) {
             const block = blocks.find(b => b.id === blockId);
             if (!block) return;
             const tag = block.tags.find(t => t.id === tagId);
             if (!tag) return;
             
-            if (field === 'weight') value = parseInt(value) || 1;
+            if (field === 'weight') {
+                value = parseInt(value) || 1;
+                // Update Slider Visuals
+                const inputEl = document.querySelector(`[data-input-id="weight-${tagId}"]`);
+                if (inputEl) {
+                    const percent = value * 10;
+                    const color = getWeightColor(value);
+                    inputEl.style.setProperty('--percent', `${percent}%`);
+                    inputEl.style.setProperty('--fill-color', color);
+                }
+            }
             tag[field] = value;
             
             if (field === 'text') {
                 tag.cat = getTagCategory(value);
-                const inputEl = document.querySelector(`[data-input-id="text-${tagId}"]`);
-                if(inputEl) {
-                    inputEl.className = inputEl.className.replace(/tag-cat-\d/, '');
-                    inputEl.classList.add(`tag-cat-${tag.cat}`);
-                }
+                // No longer applying category class to text input
             }
             
             updateProbabilitiesDisplay(blockId);
@@ -1141,7 +1182,9 @@
 
                 block.tags.forEach(tag => {
                     const prob = totalWeight > 0 ? ((tag.weight / totalWeight) * 100).toFixed(1) : 0;
-                    const catClass = `tag-cat-${tag.cat !== undefined ? tag.cat : 0}`;
+                    
+                    const sliderPercent = tag.weight * 10;
+                    const sliderColor = getWeightColor(tag.weight);
                     
                     const tagRow = document.createElement('div');
                     tagRow.className = 'flex items-center gap-2 bg-zinc-900/30 p-1.5 rounded border border-transparent hover:border-zinc-700 transition group/row tag-row';
@@ -1149,13 +1192,20 @@
                         <div class="drag-handle text-zinc-600 hover:text-zinc-300 cursor-grab px-1 shrink-0 select-none"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"></path></svg></div>
                         <div class="flex-1 flex flex-col gap-1 min-w-0">
                             <div class="flex items-center gap-2">
-                                <input type="text" value="${tag.text}" class="flex-1 bg-transparent border-none p-0 text-xs font-mono placeholder-zinc-600 focus:ring-0 min-w-0 ${catClass}" placeholder="Tag Name" data-input-id="text-${tag.id}" data-type="tag-input" autocomplete="off" onchange="updateTag(${block.id}, ${tag.id}, 'text', this.value)">
-                                <span class="text-[9px] font-mono text-zinc-500 w-8 text-right prob-display shrink-0">${prob}%</span>
+                                <input type="text" value="${tag.text}" class="flex-1 bg-transparent border-none p-0 text-xs font-mono placeholder-zinc-600 focus:ring-0 min-w-0 text-zinc-200" placeholder="Tag Name" data-input-id="text-${tag.id}" data-type="tag-input" autocomplete="off" onchange="updateTag(${block.id}, ${tag.id}, 'text', this.value)">
+                                <span class="text-sm font-bold font-mono text-blue-400 w-12 text-right prob-display shrink-0">${prob}%</span>
                             </div>
-                            <div class="flex items-center gap-2">
-                                <span class="text-[9px] text-zinc-600 uppercase font-bold w-3 shrink-0">W</span>
-                                <input type="range" min="1" max="10" step="1" value="${tag.weight}" class="flex-1 weight-slider" oninput="this.nextElementSibling.value = this.value; updateTag(${block.id}, ${tag.id}, 'weight', this.value)">
-                                <input type="number" min="1" max="10" step="1" value="${tag.weight}" class="w-8 h-4 text-center text-[10px] bg-zinc-900 border-zinc-700 rounded p-0" onchange="this.previousElementSibling.value = this.value; updateTag(${block.id}, ${tag.id}, 'weight', this.value)">
+                            <div class="flex items-center gap-2 mt-0.5">
+                                <span class="text-[9px] text-zinc-600 uppercase font-bold w-3 shrink-0" title="Weight">W</span>
+                                
+                                <!-- Segmented Power Bar Slider (No Number Input) -->
+                                <input type="range" 
+                                       min="1" max="10" step="1" 
+                                       value="${tag.weight}" 
+                                       class="flex-1 weight-slider" 
+                                       data-input-id="weight-${tag.id}"
+                                       style="--percent: ${sliderPercent}%; --fill-color: ${sliderColor};"
+                                       oninput="this.style.setProperty('--percent', (this.value * 10) + '%'); this.style.setProperty('--fill-color', getWeightColor(this.value)); updateTag(${block.id}, ${tag.id}, 'weight', this.value)">
                             </div>
                             <div class="prob-bar-container"><div class="prob-bar" style="width: ${prob}%"></div></div>
                         </div>
@@ -1184,9 +1234,6 @@
                     const prob = totalWeight > 0 ? ((tag.weight / totalWeight) * 100).toFixed(1) : 0;
                     row.querySelector('.prob-display').innerText = `${prob}%`;
                     row.querySelector('.prob-bar').style.width = `${prob}%`;
-                    const input = row.querySelector('input[type="text"]');
-                    input.className = input.className.replace(/tag-cat-\d/, '');
-                    input.classList.add(`tag-cat-${tag.cat!==undefined?tag.cat:0}`);
                 }
             });
         }
@@ -1207,16 +1254,6 @@
         }
 
         // --- Charts Logic ---
-        function getCategoryColor(cat) {
-            switch(cat) {
-                case 0: return '#60a5fa'; // Blue
-                case 1: return '#f87171'; // Red
-                case 3: return '#c084fc'; // Purple
-                case 4: return '#4ade80'; // Green
-                case 5: return '#fb923c'; // Orange
-                default: return '#9ca3af'; // Gray
-            }
-        }
 
         function renderCharts() {
             chartInstances.forEach(c => c.destroy());
@@ -1253,7 +1290,8 @@
 
                 const labels = block.tags.map(t => t.text || '(Empty)');
                 const data = block.tags.map(t => t.weight);
-                const colors = block.tags.map(t => getCategoryColor(t.cat));
+                
+                const colors = block.tags.map((_, idx) => getAutoColor(idx));
                 
                 const ctx = canvas.getContext('2d');
                 const chart = new Chart(ctx, {
@@ -1318,8 +1356,11 @@
             else if (e.key === 'ArrowUp') { e.preventDefault(); moveSelection(-1); }
             else if (e.key === 'Enter') {
                 e.preventDefault();
-                if (currentSuggestionIndex >= 0 && currentSuggestions[currentSuggestionIndex]) {
-                    applySuggestion(currentSuggestions[currentSuggestionIndex].t);
+                // Modified here: Default to index 0 if nothing selected (-1)
+                const targetIndex = currentSuggestionIndex >= 0 ? currentSuggestionIndex : 0;
+                
+                if (currentSuggestions.length > 0 && currentSuggestions[targetIndex]) {
+                    applySuggestion(currentSuggestions[targetIndex].t);
                 }
             } else if (e.key === 'Escape') hideSuggestions();
         });
@@ -1347,20 +1388,33 @@
         });
 
         function showSuggestions(query, inputEl) {
-            const lowerQuery = query.toLowerCase();
+            // UPDATED: Normalize query (replace underscores with spaces)
+            const normalizedQuery = query.toLowerCase().replace(/_/g, ' ');
+            
+            // UPDATED: Filter logic
             currentSuggestions = tagDB.filter(item => {
-                return item.t.toLowerCase().includes(lowerQuery) || (item.a && item.a.toLowerCase().includes(lowerQuery));
+                const normTag = item.t.toLowerCase().replace(/_/g, ' ');
+                const normAlias = (item.a || "").toLowerCase().replace(/_/g, ' ');
+                return normTag.includes(normalizedQuery) || normAlias.includes(normalizedQuery);
             }).sort((a, b) => b.c - a.c).slice(0, 20);
 
             if (currentSuggestions.length === 0) { hideSuggestions(); return; }
             
             currentSuggestionIndex = -1;
             suggestionBox.innerHTML = '';
+            
+            // UPDATED: Highlighting Logic (Robust Regex for mixed separators)
+            // 1. Escape regex special chars
+            const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            // 2. Allow matching space OR underscore for any space/underscore in query
+            const regexPattern = escapedQuery.replace(/[ _]/g, '[ _]');
+            const highlightRegex = new RegExp(`(${regexPattern})`, 'gi');
+            
             currentSuggestions.forEach((item, index) => {
                 const div = document.createElement('div');
                 div.className = 'suggestion-item';
                 
-                let displayTag = item.t.replace(new RegExp(`(${query})`, 'gi'), '<span class="match-highlight">$1</span>');
+                let displayTag = item.t.replace(highlightRegex, '<span class="match-highlight">$1</span>');
                 const catClass = `tag-cat-${item.cat !== undefined ? item.cat : 0}`;
                 
                 div.innerHTML = `
@@ -1401,6 +1455,95 @@
                 if (parts.length > 0) finalPrompt += `{${parts.join("|")}} `;
             });
             return finalPrompt.trim();
+        }
+
+        // Apply Logic
+        function applySyntax() {
+            const text = syntaxPreview.value.trim();
+            
+            // Auto-clear if empty
+            if (!text) {
+                if (blocks.length > 0) {
+                    blocks = [];
+                    renderBlocks();
+                    saveBlocksToLocalStorage();
+                    if(currentTab === 'charts') renderCharts();
+                }
+                return;
+            }
+
+            // Simple parser: matches {content} OR non-brace sequences
+            const matches = text.match(/\{[^{}]+\}|[^{}\s]+/g);
+            if (!matches) {
+                // Only show error if text is not empty
+                if(text.length > 0) {
+                    showToast("語法無法解析 (括號是否未閉合？)", 'warning');
+                }
+                return;
+            }
+
+            const newBlocks = [];
+            matches.forEach((matchStr, index) => {
+                let blockTags = [];
+                
+                if (matchStr.startsWith('{') && matchStr.endsWith('}')) {
+                    // Group: {1::tag|2::tag}
+                    const content = matchStr.slice(1, -1);
+                    const parts = content.split('|');
+                    parts.forEach(part => {
+                        const sepIndex = part.indexOf('::');
+                        let weight = 1;
+                        let tagName = part;
+                        
+                        if (sepIndex > -1) {
+                            const wStr = part.substring(0, sepIndex);
+                            weight = parseInt(wStr); // use Int for slider
+                            if (isNaN(weight)) weight = 1;
+                            tagName = part.substring(sepIndex + 2);
+                        }
+                        
+                        if (tagName.trim()) {
+                            blockTags.push({
+                                 id: Date.now() + Math.random(),
+                                 text: tagName.trim(),
+                                 weight: weight,
+                                 cat: getTagCategory(tagName.trim())
+                            });
+                        }
+                    });
+                } else {
+                    // Simple text: tag1 (Treat as weight 1)
+                    blockTags.push({
+                          id: Date.now() + Math.random(),
+                          text: matchStr,
+                          weight: 1,
+                          cat: getTagCategory(matchStr)
+                    });
+                }
+                
+                if (blockTags.length > 0) {
+                      newBlocks.push({
+                          id: blockIdCounter + index + 1,
+                          title: `Block ${index + 1}`,
+                          tags: blockTags,
+                          enabled: true
+                      });
+                }
+            });
+            
+            blockIdCounter += newBlocks.length + 10;
+            blocks = newBlocks;
+            renderBlocks();
+            saveBlocksToLocalStorage();
+            if(currentTab === 'charts') renderCharts();
+            // No success toast for auto-sync
+        }
+
+        function debouncedApplySyntax() {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                applySyntax();
+            }, 800); // 800ms delay to wait for typing to finish
         }
 
         function simulateGenerate() {
@@ -1454,20 +1597,23 @@
             }
             document.body.removeChild(textArea);
         }
-        function updatePreview() { syntaxPreview.value = generateSyntax(); }
+
+        function updatePreview() {
+            // Only update if user is NOT typing in it
+            if (document.activeElement !== syntaxPreview) {
+                 syntaxPreview.value = generateSyntax();
+            }
+        }
+
         function copyFullSyntax() { 
             const text = syntaxPreview.value; 
             if(text) copyTextToClipboard(text, () => showToast("已複製完整語法！", 'success')); 
         }
-        function clickToCopySyntax(el) {
-            const text = syntaxPreview.value; if(!text) return;
-            copyTextToClipboard(text, () => {
-                const feedback = el.querySelector('#copyFeedback span');
-                const originalText = feedback.innerText;
-                feedback.innerText = "COPIED!"; feedback.classList.add('text-green-400');
-                setTimeout(() => { feedback.innerText = originalText; feedback.classList.remove('text-green-400'); }, 1000);
-            });
+
+        function clickToCopySyntax() {
+            copyFullSyntax();
         }
+
         function formatCount(num) {
             if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
             if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
@@ -1517,10 +1663,14 @@
         });
 
         function renderManagerList(query) {
-            const lowerQuery = query.toLowerCase();
+            // UPDATED: Normalize for manager search as well
+            const normalizedQuery = query.toLowerCase().replace(/_/g, ' ');
+            
             // Filter
             const matches = tagDB.filter(item => {
-                return item.t.toLowerCase().includes(lowerQuery) || (item.a && item.a.toLowerCase().includes(lowerQuery));
+                const normTag = item.t.toLowerCase().replace(/_/g, ' ');
+                const normAlias = (item.a || "").toLowerCase().replace(/_/g, ' ');
+                return normTag.includes(normalizedQuery) || normAlias.includes(normalizedQuery);
             });
 
             // Limit display for performance
@@ -1626,7 +1776,7 @@
                     editingTagOriginalKey = newKey;
                     btnDeleteTag.classList.remove('hidden');
                     editPanelTitle.innerText = "編輯標籤";
-                }
+                } 
                 // 2. Edit Mode (Rename)
                 else if (newKey !== editingTagOriginalKey) {
                     // Check if new key already exists
