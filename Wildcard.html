@@ -298,6 +298,20 @@
         .toast-item.hiding {
             animation: fadeOut 0.3s ease-in forwards;
         }
+        
+        .sortable-fallback {
+            opacity: 1 !important;
+            background: #27272a !important; /* 強制深色背景，避免透明 */
+            border: 1px solid #3b82f6;      /* 藍色邊框標示 */
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
+            z-index: 99999 !important;      /* 確保在最上層 */
+            cursor: grabbing !important;
+            transform: scale(1.02);         /* 稍微放大增加浮動感 */
+        }
+        /* 隱藏原本位置的元素，只顯示 Ghost(佔位) 和 Fallback(拖曳物) */
+        .sortable-drag {
+            opacity: 0;
+        }
     </style>
 </head>
 <body class="flex flex-col h-screen overflow-hidden text-sm">
@@ -1176,7 +1190,14 @@
                 if (block.tags.length === 0) card.querySelector('.no-tags-msg').classList.remove('hidden');
 
                 new Sortable(tagsContainer, {
-                    animation: 150, handle: '.drag-handle', ghostClass: 'sortable-ghost',
+                    animation: 150, 
+                    handle: '.drag-handle', 
+                    ghostClass: 'sortable-ghost',
+                    // --- 新增以下三行設定 ---
+                    forceFallback: true,        // 停用瀏覽器原生拖曳，改用模擬 (解決被擋住的關鍵)
+                    fallbackOnBody: true,       // 將拖曳元素掛載到 Body 上，避免被 overflow 裁切
+                    fallbackClass: 'sortable-fallback', // 套用上面新增的 CSS 樣式
+                    // ----------------------
                     onEnd: function (evt) { handleSort(block.id, evt.oldIndex, evt.newIndex); }
                 });
 
