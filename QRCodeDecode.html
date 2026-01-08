@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Code & Base32 全能工具</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        bg: { main: '#09090b', panel: '#18181b', surface: '#27272a', hover: '#3f3f46' },
+                        accent: { DEFAULT: '#3b82f6', hover: '#2563eb', dim: 'rgba(59, 130, 246, 0.1)' },
+                        success: { DEFAULT: '#10b981', dim: 'rgba(16, 185, 129, 0.1)' }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- jsQR Library for decoding -->
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+    
+    <style>
+        body { background-color: #09090b; color: #e4e4e7; font-family: 'Inter', sans-serif; }
+        
+        /* 滾動條 */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #52525b; }
+
+        /* 卡片與容器 */
+        .panel-card {
+            background-color: #18181b;
+            border: 1px solid #27272a;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        /* 拖曳區塊 */
+        #uploadZone {
+            transition: all 0.2s ease;
+            background-image: url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' rx='8' ry='8' stroke='%233F3F46FF' stroke-width='2' stroke-dasharray='12%2c 12' stroke-dashoffset='0' stroke-linecap='square'/%3e%3c/svg%3e");
+        }
+        #uploadZone:hover, #uploadZone.drag-over {
+            background-color: rgba(59, 130, 246, 0.05);
+            background-image: url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' rx='8' ry='8' stroke='%233B82F6FF' stroke-width='3' stroke-dasharray='12%2c 12' stroke-dashoffset='0' stroke-linecap='square'/%3e%3c/svg%3e");
+        }
+
+        /* 掃描線動畫 */
+        .scan-line {
+            position: absolute;
+            width: 100%;
+            height: 2px;
+            background: #3b82f6;
+            box-shadow: 0 0 4px #3b82f6;
+            top: 0;
+            left: 0;
+            animation: scan 2s linear infinite;
+            display: none;
+        }
+        .scanning .scan-line { display: block; }
+        
+        @keyframes scan {
+            0% { top: 0%; opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { top: 100%; opacity: 0; }
+        }
+
+        /* 結果文字區 */
+        .code-block {
+            font-family: 'JetBrains Mono', monospace;
+            background: #0f0f10;
+            border: 1px solid #27272a;
+            border-radius: 4px;
+            padding: 12px;
+            color: #a1a1aa;
+            word-break: break-all;
+            position: relative;
+        }
+        
+        .badge {
+            font-size: 0.6rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .badge-base32 { background-color: rgba(16, 185, 129, 0.1); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.2); }
+
+        /* Tabs */
+        .tab-btn {
+            border-bottom: 2px solid transparent;
+            color: #71717a;
+            transition: all 0.2s;
+        }
+        .tab-btn.active {
+            border-bottom-color: #3b82f6;
+            color: #e4e4e7;
+        }
+        
+        textarea {
+            field-sizing: content;
+            min-height: 100px;
+        }
+    </style>
+</head>
+<body class="flex flex-col h-screen overflow-hidden text-sm">
+
+    <!-- 頂部列 -->
+    <header class="bg-bg-panel border-b border-zinc-800 flex flex-col shrink-0 z-30">
+        <div class="h-14 flex items-center justify-between px-6">
+            <div class="flex items-center gap-3">
+                <div class="p-1.5 bg-zinc-800 rounded-lg border border-zinc-700">
+                    <svg class="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
+                </div>
+                <h1 class="text-zinc-100 font-bold tracking-wide text-base">QR Code & Base32 全能工具</h1>
+            </div>
+            
+            <div>
+                <button onclick="resetApp()" class="text-xs text-zinc-500 hover:text-zinc-300 transition px-3 py-1.5 rounded hover:bg-zinc-800">
+                    重置 / 清空
+                </button>
+            </div>
+        </div>
+
+        <!-- 分頁切換 -->
+        <div class="flex px-6 gap-6">
+            <button onclick="switchTab('qr')" id="tab-qr" class="tab-btn active pb-3 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                QR 圖片解碼
+            </button>
+            <button onclick="switchTab('converter')" id="tab-converter" class="tab-btn pb-3 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
+                Base32 轉換器
+            </button>
+        </div>
+    </header>
+
+    <!-- 主內容區 -->
+    <div class="flex-1 flex overflow-hidden relative bg-bg-main">
+        
+        <!-- Tab 1: QR Code Scanner View -->
+        <div id="view-qr" class="flex-1 flex w-full h-full">
+            <!-- 左側：圖片上傳與預覽 -->
+            <div class="flex-1 flex flex-col p-6 overflow-y-auto custom-scrollbar items-center justify-center relative">
+                
+                <!-- 上傳區域 -->
+                <div id="uploadZone" class="w-full max-w-xl h-[50vh] rounded-xl flex flex-col items-center justify-center cursor-pointer relative overflow-hidden group" onclick="document.getElementById('fileInput').click()">
+                    
+                    <!-- 預覽圖片容器 -->
+                    <div id="previewContainer" class="absolute inset-2 hidden flex items-center justify-center bg-black/40 rounded-lg overflow-hidden">
+                        <img id="previewImage" class="max-w-full max-h-full object-contain shadow-2xl" src="" alt="Uploaded QR Code">
+                        <div class="scan-line" id="scanLine"></div>
+                    </div>
+
+                    <!-- 空狀態提示 -->
+                    <div id="uploadPrompt" class="text-center pointer-events-none transition-opacity duration-300">
+                        <div class="w-16 h-16 bg-zinc-800 rounded-full flex items-center justify-center mx-auto mb-4 border border-zinc-700 group-hover:border-accent/50 group-hover:text-accent transition">
+                            <svg class="w-8 h-8 text-zinc-400 group-hover:text-accent transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                        </div>
+                        <h2 class="text-lg font-bold text-zinc-200 mb-1">點擊或拖曳 QR Code</h2>
+                        <p class="text-zinc-500 text-xs">支援 .png, .jpg, .jpeg | 自動分析內容</p>
+                    </div>
+
+                    <input type="file" id="fileInput" class="hidden" accept="image/*" onchange="handleFileSelect(this.files)">
+                </div>
+
+                <!-- 錯誤訊息 Toast -->
+                <div id="errorToast" class="absolute bottom-6 bg-red-500/10 border border-red-500/50 text-red-400 px-4 py-2 rounded-lg text-xs font-bold hidden flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <span id="errorMsg">無法辨識 QR Code</span>
+                </div>
+            </div>
+
+            <!-- 右側：結果面板 (QR) -->
+            <div class="w-[400px] bg-bg-panel border-l border-zinc-800 flex flex-col z-20 shrink-0 shadow-xl">
+                <div class="p-4 border-b border-zinc-800">
+                    <h3 class="text-zinc-400 text-xs font-bold uppercase tracking-wider mb-1">解析結果</h3>
+                    <p class="text-[10px] text-zinc-600">Smart Analysis & Decoding</p>
+                </div>
+
+                <div class="flex-1 p-4 overflow-y-auto custom-scrollbar flex flex-col gap-4">
+                    
+                    <!-- 結果狀態 -->
+                    <div id="resultStateEmpty" class="flex flex-col items-center justify-center h-40 text-zinc-600 border border-dashed border-zinc-800 rounded-lg bg-zinc-900/50">
+                        <span class="text-xs">等待圖片上傳...</span>
+                    </div>
+
+                    <div id="resultContent" class="hidden space-y-6">
+                        <!-- 原始內容 -->
+                        <div class="space-y-2">
+                            <div class="flex justify-between items-center">
+                                <label class="text-xs text-zinc-400 font-bold flex items-center gap-2">
+                                    原始內容
+                                    <span class="badge bg-zinc-800 text-zinc-400 border border-zinc-700">RAW</span>
+                                </label>
+                                <button onclick="copyToClipboard('rawText')" class="text-[10px] text-accent hover:text-blue-400 flex items-center gap-1 transition">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                                    複製
+                                </button>
+                            </div>
+                            <div class="code-block text-xs leading-relaxed select-text" id="rawText"></div>
+                        </div>
+
+                        <!-- Base32 解碼結果區塊 (動態顯示) -->
+                        <div id="base32Section" class="hidden space-y-2 animate-pulse">
+                            <div class="flex justify-between items-center">
+                                <label class="text-xs text-zinc-400 font-bold flex items-center gap-2">
+                                    智慧解碼
+                                    <span class="badge badge-base32">BASE32 DETECTED</span>
+                                </label>
+                                <button onclick="copyToClipboard('base32Text')" class="text-[10px] text-success hover:text-green-400 flex items-center gap-1 transition">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                                    複製
+                                </button>
+                            </div>
+                            
+                            <!-- 文字結果 -->
+                            <div class="code-block text-xs leading-relaxed select-text border-green-900/30 bg-green-900/10 text-green-100" id="base32Text"></div>
+                            
+                            <!-- 圖片結果 (如果是圖片 Base32) -->
+                            <div id="base32ImageContainer" class="hidden mt-2">
+                                <p class="text-[10px] text-zinc-500 mb-1">預覽 (Decoded Image):</p>
+                                <div class="rounded-lg overflow-hidden border border-zinc-700 bg-black/50 p-2">
+                                    <img id="base32ImagePreview" class="max-w-full h-auto mx-auto" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 動作按鈕 -->
+                        <div id="actionButtons" class="hidden pt-2">
+                            <a id="openLinkBtn" href="#" target="_blank" class="flex items-center justify-center gap-2 w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold py-2.5 rounded transition shadow-lg shadow-blue-900/20">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                                開啟連結
+                            </a>
+                        </div>
+
+                        <!-- 詳細資訊 -->
+                        <div class="pt-4 border-t border-zinc-800">
+                            <label class="text-xs text-zinc-400 font-bold mb-2 block">圖片資訊</label>
+                            <div class="grid grid-cols-2 gap-2 text-[10px]">
+                                <div class="bg-zinc-900 p-2 rounded border border-zinc-800">
+                                    <span class="block text-zinc-500 mb-0.5">尺寸</span>
+                                    <span class="text-zinc-300 font-mono" id="metaSize">-</span>
+                                </div>
+                                <div class="bg-zinc-900 p-2 rounded border border-zinc-800">
+                                    <span class="block text-zinc-500 mb-0.5">檔案類型</span>
+                                    <span class="text-zinc-300 font-mono" id="metaType">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 2: Base32 Converter View (Hidden by default) -->
+        <div id="view-converter" class="hidden flex-1 flex flex-col items-center p-8 overflow-y-auto w-full">
+            <div class="w-full max-w-2xl space-y-6">
+                
+                <div class="text-center mb-8">
+                    <h2 class="text-2xl font-bold text-zinc-100 mb-2">Base32 編碼/解碼器</h2>
+                    <p class="text-zinc-500 text-sm">輸入文字或 Base32 字串進行雙向轉換。</p>
+                </div>
+
+                <!-- Input Card -->
+                <div class="panel-card p-6 space-y-4">
+                    <div class="flex justify-between items-center">
+                        <label class="text-xs font-bold text-zinc-400 uppercase tracking-wider">輸入內容</label>
+                        <button onclick="document.getElementById('convInput').value=''; document.getElementById('convOutput').value='';" class="text-[10px] text-zinc-500 hover:text-red-400 transition">清除</button>
+                    </div>
+                    <textarea id="convInput" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-4 text-zinc-300 font-mono text-sm focus:outline-none focus:border-accent transition placeholder-zinc-700" placeholder="在此輸入文字或是 Base32 字串..."></textarea>
+                    
+                    <div class="flex gap-4">
+                        <button onclick="doConvert('encode')" class="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 py-2.5 rounded-lg text-xs font-bold transition border border-zinc-700 flex justify-center items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
+                            文字轉 Base32 (Encode)
+                        </button>
+                        <button onclick="doConvert('decode')" class="flex-1 bg-accent hover:bg-accent-hover text-white py-2.5 rounded-lg text-xs font-bold transition shadow-lg shadow-blue-900/20 flex justify-center items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path></svg>
+                            Base32 轉文字 (Decode)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Output Card -->
+                <div class="panel-card p-6 space-y-4 relative">
+                    <div class="flex justify-between items-center">
+                        <label class="text-xs font-bold text-zinc-400 uppercase tracking-wider">轉換結果</label>
+                        <button onclick="copyToClipboard('convOutput')" class="text-[10px] text-accent hover:text-blue-400 flex items-center gap-1 transition">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                            複製結果
+                        </button>
+                    </div>
+                    <textarea id="convOutput" readonly class="w-full bg-[#0f0f10] border border-zinc-800 rounded-lg p-4 text-green-400 font-mono text-sm focus:outline-none transition" placeholder="結果將顯示於此..."></textarea>
+                    <div id="convError" class="text-red-400 text-xs hidden mt-2"></div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+    <!-- 隱藏的 Canvas 用於讀取像素 -->
+    <canvas id="processCanvas" class="hidden"></canvas>
+
+    <script>
+        // DOM Elements
+        const uploadZone = document.getElementById('uploadZone');
+        const fileInput = document.getElementById('fileInput');
+        const previewImage = document.getElementById('previewImage');
+        const previewContainer = document.getElementById('previewContainer');
+        const uploadPrompt = document.getElementById('uploadPrompt');
+        const scanLine = document.getElementById('scanLine');
+        const errorToast = document.getElementById('errorToast');
+        const errorMsg = document.getElementById('errorMsg');
+        
+        const resultStateEmpty = document.getElementById('resultStateEmpty');
+        const resultContent = document.getElementById('resultContent');
+        const rawText = document.getElementById('rawText');
+        const base32Section = document.getElementById('base32Section');
+        const base32Text = document.getElementById('base32Text');
+        const base32ImageContainer = document.getElementById('base32ImageContainer');
+        const base32ImagePreview = document.getElementById('base32ImagePreview');
+        const actionButtons = document.getElementById('actionButtons');
+        const openLinkBtn = document.getElementById('openLinkBtn');
+        const metaSize = document.getElementById('metaSize');
+        const metaType = document.getElementById('metaType');
+        
+        const processCanvas = document.getElementById('processCanvas');
+        const processCtx = processCanvas.getContext('2d');
+
+        // --- Base32 Core Logic ---
+        const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+
+        function decodeBase32(input) {
+            // 移除空白、連字號、填充符號
+            const cleanInput = input.replace(/[\s=\-]/g, "").toUpperCase();
+            
+            // 檢查是否包含非法字元
+            if (!/^[A-Z2-7]*$/.test(cleanInput) || cleanInput.length === 0) {
+                return null; // 非 Base32 或空
+            }
+
+            let bits = 0;
+            let value = 0;
+            let output = new Uint8Array(cleanInput.length * 5 / 8 | 0);
+            let index = 0;
+
+            for (let i = 0; i < cleanInput.length; i++) {
+                value = (value << 5) | BASE32_ALPHABET.indexOf(cleanInput[i]);
+                bits += 5;
+
+                if (bits >= 8) {
+                    output[index++] = (value >>> (bits - 8)) & 0xFF;
+                    bits -= 8;
+                }
+            }
+            return output; // 回傳 Uint8Array
+        }
+
+        function encodeBase32(inputBytes) {
+            let bits = 0;
+            let value = 0;
+            let output = "";
+
+            for (let i = 0; i < inputBytes.length; i++) {
+                value = (value << 8) | inputBytes[i];
+                bits += 8;
+
+                while (bits >= 5) {
+                    output += BASE32_ALPHABET[(value >>> (bits - 5)) & 31];
+                    bits -= 5;
+                }
+            }
+
+            if (bits > 0) {
+                output += BASE32_ALPHABET[(value << (5 - bits)) & 31];
+            }
+            
+            // Padding (Optional usually, but good for standard)
+            // while (output.length % 8 !== 0) output += "=";
+
+            return output;
+        }
+
+        function uint8ArrayToString(u8Array) {
+            const decoder = new TextDecoder('utf-8', { fatal: false });
+            let isBinary = false;
+            let nullCount = 0;
+            for(let i=0; i<Math.min(u8Array.length, 100); i++) {
+                if(u8Array[i] === 0) nullCount++;
+            }
+            if(nullCount > 0) isBinary = true; 
+            
+            return {
+                text: isBinary ? null : decoder.decode(u8Array),
+                bytes: u8Array,
+                isBinary: isBinary
+            };
+        }
+
+        function stringToUint8Array(str) {
+            return new TextEncoder().encode(str);
+        }
+
+        // --- Tab Switching ---
+        function switchTab(tab) {
+            const tabs = ['qr', 'converter'];
+            tabs.forEach(t => {
+                const btn = document.getElementById(`tab-${t}`);
+                const view = document.getElementById(`view-${t}`);
+                if (t === tab) {
+                    btn.classList.add('active');
+                    view.classList.remove('hidden');
+                } else {
+                    btn.classList.remove('active');
+                    view.classList.add('hidden');
+                }
+            });
+        }
+
+        // --- Converter Logic ---
+        function doConvert(action) {
+            const inputVal = document.getElementById('convInput').value.trim();
+            const outputEl = document.getElementById('convOutput');
+            const errorEl = document.getElementById('convError');
+            
+            outputEl.value = "";
+            errorEl.innerText = "";
+            errorEl.classList.add('hidden');
+
+            if (!inputVal) return;
+
+            try {
+                if (action === 'encode') {
+                    // Text -> Base32
+                    const bytes = stringToUint8Array(inputVal);
+                    const base32 = encodeBase32(bytes);
+                    outputEl.value = base32;
+                } else {
+                    // Base32 -> Text
+                    const bytes = decodeBase32(inputVal);
+                    if (!bytes) {
+                        throw new Error("無效的 Base32 字串 (包含非法字元)");
+                    }
+                    const result = uint8ArrayToString(bytes);
+                    
+                    if (result.isBinary) {
+                        outputEl.value = "[Binary Data] Hex:\n" + Array.from(result.bytes).map(b => b.toString(16).padStart(2,'0')).join(' ');
+                    } else {
+                        outputEl.value = result.text;
+                    }
+                }
+            } catch (e) {
+                errorEl.innerText = "錯誤: " + e.message;
+                errorEl.classList.remove('hidden');
+            }
+        }
+
+
+        // --- QR Drag & Drop Logic ---
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            uploadZone.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            uploadZone.addEventListener(eventName, () => uploadZone.classList.add('drag-over'), false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            uploadZone.addEventListener(eventName, () => uploadZone.classList.remove('drag-over'), false);
+        });
+
+        uploadZone.addEventListener('drop', handleDrop, false);
+
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            handleFileSelect(files);
+        }
+
+        function handleFileSelect(files) {
+            if (files.length === 0) return;
+            const file = files[0];
+            
+            if (!file.type.startsWith('image/')) {
+                showError('請上傳圖片檔案');
+                return;
+            }
+
+            hideError();
+            resetResult();
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                previewImage.src = e.target.result;
+                previewContainer.classList.remove('hidden');
+                uploadPrompt.classList.add('opacity-0');
+                previewContainer.classList.add('scanning');
+                
+                metaType.innerText = file.type.split('/')[1].toUpperCase();
+                
+                previewImage.onload = () => {
+                    metaSize.innerText = `${previewImage.naturalWidth} x ${previewImage.naturalHeight}`;
+                    scanQRCode(previewImage);
+                };
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function scanQRCode(img) {
+            processCanvas.width = img.naturalWidth;
+            processCanvas.height = img.naturalHeight;
+            processCtx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight);
+            
+            const imageData = processCtx.getImageData(0, 0, processCanvas.width, processCanvas.height);
+            
+            const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                inversionAttempts: "dontInvert",
+            });
+
+            setTimeout(() => {
+                previewContainer.classList.remove('scanning');
+                
+                if (code) {
+                    showResult(code);
+                } else {
+                    showError('未偵測到 QR Code');
+                }
+            }, 600);
+        }
+
+        function showResult(code) {
+            resultStateEmpty.classList.add('hidden');
+            resultContent.classList.remove('hidden');
+            
+            const text = code.data;
+            rawText.innerText = text;
+            
+            // --- Smart Decode Logic for QR ---
+            base32Section.classList.add('hidden');
+            base32ImageContainer.classList.add('hidden');
+            base32Section.classList.remove('animate-pulse');
+
+            // 嘗試 Base32 解碼
+            const base32Bytes = decodeBase32(text);
+            
+            if (base32Bytes && base32Bytes.length > 0) {
+                const decodedResult = uint8ArrayToString(base32Bytes);
+                
+                base32Section.classList.remove('hidden');
+                base32Section.classList.add('animate-pulse');
+                setTimeout(() => base32Section.classList.remove('animate-pulse'), 500);
+
+                if (!decodedResult.isBinary) {
+                    base32Text.innerText = decodedResult.text;
+                } else {
+                    base32Text.innerText = "[Binary Data] Hex: " + Array.from(base32Bytes).slice(0, 20).map(b => b.toString(16).padStart(2,'0')).join(' ') + (base32Bytes.length > 20 ? '...' : '');
+                }
+
+                // Image Magic Number Check
+                if (base32Bytes.length > 8) {
+                    const header = Array.from(base32Bytes.slice(0, 4)).map(b => b.toString(16).padStart(2,'0')).join('');
+                    let mimeType = null;
+                    if (header.startsWith('89504e47')) mimeType = 'image/png';
+                    else if (header.startsWith('ffd8ff')) mimeType = 'image/jpeg';
+                    else if (header.startsWith('474946')) mimeType = 'image/gif';
+
+                    if (mimeType) {
+                        const blob = new Blob([base32Bytes], { type: mimeType });
+                        const imageUrl = URL.createObjectURL(blob);
+                        base32ImagePreview.src = imageUrl;
+                        base32ImageContainer.classList.remove('hidden');
+                        if(base32Text.innerText.startsWith('[Binary')) {
+                             base32Text.innerText += `\n(Detected ${mimeType})`;
+                        }
+                    }
+                }
+            }
+
+            // URL Check
+            const urlPattern = /^(http|https):\/\/[^ "]+$/i;
+            if (urlPattern.test(text)) {
+                actionButtons.classList.remove('hidden');
+                openLinkBtn.href = text;
+            } else {
+                actionButtons.classList.add('hidden');
+            }
+        }
+
+        function showError(msg) {
+            errorMsg.innerText = msg;
+            errorToast.classList.remove('hidden');
+            setTimeout(() => errorToast.classList.add('hidden'), 4000);
+        }
+
+        function hideError() {
+            errorToast.classList.add('hidden');
+        }
+
+        function resetResult() {
+            resultStateEmpty.classList.remove('hidden');
+            resultContent.classList.add('hidden');
+            rawText.innerText = '';
+            base32Text.innerText = '';
+            base32Section.classList.add('hidden');
+            actionButtons.classList.add('hidden');
+            metaSize.innerText = '-';
+            metaType.innerText = '-';
+        }
+
+        function resetApp() {
+            fileInput.value = '';
+            previewImage.src = '';
+            previewContainer.classList.add('hidden');
+            uploadPrompt.classList.remove('opacity-0');
+            resetResult();
+            hideError();
+            
+            // Clear converter inputs too
+            document.getElementById('convInput').value = '';
+            document.getElementById('convOutput').value = '';
+            document.getElementById('convError').classList.add('hidden');
+        }
+
+        function copyToClipboard(elementId) {
+            let text = "";
+            const el = document.getElementById(elementId);
+            if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+                text = el.value;
+            } else {
+                text = el.innerText;
+            }
+            
+            if(!text) return;
+            navigator.clipboard.writeText(text).then(() => {
+                // Visual feedback logic (simplified for both types)
+                const originalColor = window.getComputedStyle(el).color;
+                // Just a quick flash effect
+                el.style.opacity = '0.5';
+                setTimeout(() => el.style.opacity = '1', 200);
+            }).catch(err => {
+                console.error('Copy failed', err);
+            });
+        }
+    </script>
+</body>
+</html>
