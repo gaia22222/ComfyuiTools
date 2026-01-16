@@ -64,7 +64,7 @@
 
     <style>
         :root {
-            --slot-size: 140px;
+            --slot-size: 250px;
         }
 
         body {
@@ -376,6 +376,44 @@
             border-radius: 3px;
             letter-spacing: 0.5px;
         }
+        .img-slot.custom-named {
+            border: 3px solid #ef4444 !important; /* 紅色邊框 */
+        }
+
+        .img-slot.custom-named .index-badge {
+            background-color: #ef4444 !important; /* 紅色底 */
+            color: white;                         /* 白字 */
+            
+            /* 新增：防止文字太長撐爆版面 */
+            max-width: 90%;                       /* 最大寬度 */
+            white-space: nowrap;                  /* 不換行 */
+            overflow: hidden;                     /* 超出隱藏 */
+            text-overflow: ellipsis;              /* 超出顯示 ... */
+            font-size: 11px;                      /* 字稍微大一點點以便閱讀 */
+            padding: 3px 8px;                     /* 增加內距 */
+            box-shadow: 0 2px 4px rgba(0,0,0,0.5); /* 增加陰影讓紅標更突出 */
+        }
+
+        /* 預覽區的新檔名如果是自訂的，顯示紅色 */
+        .text-custom-alert {
+            color: #ef4444 !important; /* Red-500 */
+            font-weight: bold;
+        }
+
+        /* === 新增：原地編輯輸入框動畫 === */
+        @keyframes scaleIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .rename-overlay {
+            animation: scaleIn 0.15s ease-out forwards;
+        }
+
+        /* 輸入框 Placeholder 顏色 */
+        .rename-input::placeholder {
+            color: rgba(255, 255, 255, 0.3);
+        }
     </style>
 </head>
 <body class="flex flex-col h-screen overflow-hidden text-sm">
@@ -684,7 +722,8 @@
         // === 歷史紀錄功能 ===
         function getCurrentState() {
             return {
-                images: [...images], // 淺拷貝陣列
+                // 使用 map 進行物件的淺拷貝，確保 customName 屬性被獨立儲存
+                images: images.map(img => ({...img})), 
                 settings: {
                     prefix: prefixInput.value,
                     suffix: suffixInput.value,
@@ -720,6 +759,138 @@
                 renderHistoryLog();
             }
         }
+
+        // === 修改後：原地美化版改名 ===
+        function handleCustomRename(id) {
+            const imgObj = images.find(img => img.id === id);
+            if (!imgObj) return;
+
+            const card = document.getElementById(id);
+            if (!card) return;
+
+            // 防止重複開啟
+            if (card.querySelector('.rename-overlay')) return;
+
+            // 1. 建立覆蓋層 (Overlay)
+            const overlay = document.createElement('div');
+            overlay.className = 'rename-overlay absolute inset-0 z-50 flex flex-col items-center justify-center bg-zinc-900/90 backdrop-blur-[2px] rounded-lg cursor-default';
+            
+            // 阻擋點擊冒泡，避免點輸入框時觸發選取圖片
+            overlay.onclick = (e) => e.stopPropagation();
+            overlay.ondblclick = (e) => e.stopPropagation();
+
+            // 2. 建立輸入框
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'rename-input bg-transparent border-b-2 border-blue-500 text-white text-center text-sm font-bold outline-none px-2 py-1 w-3/4 mb-2';
+            input.value = imgObj.customName || ""; // 填入現有名稱
+            input.placeholder = "輸入名稱...";
+            
+            // 3. 建立提示文字
+            const hint = document.createElement('div');
+            hint.className = 'text-[10px] text-zinc-500 font-mono';
+            hint.innerHTML = 'Enter 確定 / Esc 取消';
+
+            // 4. 組合並加入 DOM
+            overlay.appendChild(input);
+            overlay.appendChild(hint);
+            card.appendChild(overlay);
+
+            // 5. 自動聚焦並全選文字
+            input.focus();
+            input.select();
+
+            // 6. 定義儲存邏輯
+            const save = () => {
+                const val = input.value.trim();
+                
+                // 只有當值真的改變時才記錄歷史
+                if (val !== (imgObj.customName || "")) {
+                    saveStateToHistory('自訂命名', val ? `改名為 ${val}` : '恢復自動排序');
+                    
+                    if (val === "") {
+                        delete imgObj.customName;
+                    } else {
+                        imgObj.customName = val;
+                    }
+                    // 更新畫面
+                    updateIndexes(); 
+                    updateAllPreviews();
+                }
+                close();
+            };
+
+            // 7. 定義關閉邏輯
+            const close = () => {
+                overlay.remove();
+                // 關閉後重新聚焦回左側面板，方便鍵盤操作
+                document.getElementById('leftPanel').focus();
+            };
+
+            // 8. 綁定事件
+            input.addEventListener('keydown', (e) => {
+                e.stopPropagation(); // 防止觸發全域快捷鍵 (如 Delete)
+                if (e.key === 'Enter') {
+                    save();
+                } else if (e.key === 'Escape') {
+                    close();
+                }
+            });
+
+            // 失焦時自動儲存 (如果你希望失焦是取消，改呼叫 close() 即可)
+            input.addEventListener('blur', () => {
+                // 延遲一下以免和點擊其他元素衝突
+                setTimeout(save, 100);
+            });
+        }
+
+        // === 核心：統一的檔名計算器 ===
+        function calculateAllNames() {
+            const startNum = parseInt(startNumInput.value) || 1;
+            const prefix = prefixInput.value;
+            const suffix = suffixInput.value;
+            const pad = padZeroCheckbox.checked;
+            const format = formatSelect.value;
+
+            let autoCounter = 0; // 自動計數器
+
+            return images.map(img => {
+                const originalName = img.file.name;
+                const ext = getNewExtension(originalName, format);
+                let finalNameBase = "";
+                let isCustom = false;
+
+                if (img.customName) {
+                    // === 自訂邏輯 ===
+                    isCustom = true;
+                    let customVal = img.customName;
+                    
+                    // 如果自訂的是「純數字」且「開啟補零」，則幫忙補零
+                    if (pad && /^\d+$/.test(customVal)) {
+                        customVal = customVal.padStart(2, '0');
+                    }
+                    finalNameBase = customVal;
+                    // 不增加 autoCounter，維持跳號邏輯
+                } else {
+                    // === 自動邏輯 ===
+                    let numStr = (startNum + autoCounter).toString();
+                    if (pad) numStr = numStr.padStart(2, '0');
+                    finalNameBase = `${prefix}${numStr}${suffix}`;
+                    
+                    autoCounter++; 
+                }
+
+                return {
+                    id: img.id,
+                    newName: finalNameBase + ext,
+                    isCustom: isCustom,
+                    // 【修改這裡】：如果是自訂，顯示名稱(finalNameBase)；否則顯示數字
+                    autoIndexDisplay: isCustom ? finalNameBase : (startNum + autoCounter - 1) 
+                };
+            });
+        }
+
+        
 
         function applyState(state) {
             // 還原圖片
@@ -1291,28 +1462,24 @@
             const div = document.createElement('div');
             div.className = 'img-slot';
             div.id = imgObj.id;
+            
+            // 1. 若有自訂名稱，加入紅色樣式
+            if (imgObj.customName) {
+                div.classList.add('custom-named');
+            }
+
             div.onclick = () => selectImage(imgObj.id);
-
-            div.onmouseenter = () => {
-                if (hoverPreviewCheckbox.checked) {
-                    updatePreviewPane(imgObj.id);
-                }
-            };
-
-            div.onmouseleave = () => {
-                if (hoverPreviewCheckbox.checked) {
-                    if (selectedImageId) {
-                        updatePreviewPane(selectedImageId);
-                    } else {
-                        noSelectionMsg.style.display = 'flex';
-                        selectionInfo.style.display = 'none';
-                    }
-                }
+            
+            // === 2. 新增雙擊事件 ===
+            div.ondblclick = (e) => {
+                e.stopPropagation();
+                handleCustomRename(imgObj.id);
             };
 
             const badge = document.createElement('div');
             badge.className = 'index-badge';
-            badge.innerText = index + startNum;
+            // 注意：這裡的數字稍後會由 updateIndexes 覆蓋，所以先填預設即可
+            badge.innerText = index + startNum; 
             div.appendChild(badge);
 
             // 顯示 PSD 標籤
@@ -1387,12 +1554,11 @@
             noSelectionMsg.style.display = 'none';
             selectionInfo.style.display = 'flex';
 
-            // 處理預覽圖
+            // 圖片顯示邏輯 (保持不變)
             if (imgObj.loaded && !imgObj.error) {
                 previewImg.src = imgObj.previewUrl;
                 previewImg.style.display = 'block';
             } else {
-                // 錯誤或載入中
                 previewImg.src = '';
                 previewImg.style.display = 'none';
             }
@@ -1401,20 +1567,22 @@
             previewSize.innerText = formatBytes(imgObj.file.size);
             previewType.innerText = imgObj.file.type || (imgObj.isPsd ? 'image/vnd.adobe.photoshop' : 'Unknown');
 
-            const index = images.indexOf(imgObj);
-            const pre = prefixInput.value.trim(); 
-            const suf = suffixInput.value.trim();
-            const pad = padZeroCheckbox.checked;
-            const startNum = parseInt(startNumInput.value) || 1;
-            const format = formatSelect.value;
-            
-            let numStr = (index + startNum).toString();
-            if (pad) numStr = numStr.padStart(2, '0');
-            
-            const originalName = imgObj.file.name;
-            const ext = getNewExtension(originalName, format);
-            
-            previewNewName.innerText = `${pre}${numStr}${suf}${ext}`;
+            // === 新邏輯：從計算器取得名稱 ===
+            const nameData = calculateAllNames();
+            const myInfo = nameData.find(x => x.id === id);
+
+            if (myInfo) {
+                previewNewName.innerText = myInfo.newName;
+                
+                // 如果是自訂，變更文字顏色
+                if (myInfo.isCustom) {
+                    previewNewName.classList.add('text-custom-alert', 'text-red-500'); // 加入紅色
+                    previewNewName.classList.remove('text-white');
+                } else {
+                    previewNewName.classList.remove('text-custom-alert', 'text-red-500');
+                    previewNewName.classList.add('text-white');
+                }
+            }
         }
 
         function formatBytes(bytes) {
@@ -1474,21 +1642,36 @@
         }
 
         function updateIndexes() {
+            // 1. 確保陣列順序與 DOM 一致
             const cards = gridContainer.children;
-            let currentIdx = 0;
-            const startNum = parseInt(startNumInput.value) || 1;
             const newOrderImages = [];
-            
             Array.from(cards).forEach(card => {
                 if (card.id === 'emptyMsg') return;
-                const badge = card.querySelector('.index-badge');
-                if (badge) badge.innerText = currentIdx + startNum;
                 const imgObj = images.find(img => img.id === card.id);
                 if (imgObj) newOrderImages.push(imgObj);
-                currentIdx++;
             });
-            
             if (newOrderImages.length === images.length) images = newOrderImages;
+
+            // 2. 計算所有名稱與序號狀態
+            const nameMap = calculateAllNames(); // 呼叫剛剛寫的核心函式
+
+            // 3. 更新 DOM 上的標記
+            images.forEach(img => {
+                const info = nameMap.find(x => x.id === img.id);
+                const card = document.getElementById(img.id);
+                if (!card || !info) return;
+
+                // 更新左上角序號 (自動的顯示數字，自訂的顯示 ★)
+                const badge = card.querySelector('.index-badge');
+                if (badge) badge.innerText = info.autoIndexDisplay;
+
+                // 更新紅框樣式
+                if (info.isCustom) {
+                    card.classList.add('custom-named');
+                } else {
+                    card.classList.remove('custom-named');
+                }
+            });
         }
 
         // === 匯出邏輯 ===
@@ -1509,6 +1692,7 @@
             const needClean = cleanMetaCheckbox.checked; 
             const startNum = parseInt(startNumInput.value) || 1;
             const targetFormat = formatSelect.value;
+            const allNames = calculateAllNames();
 
             try {
                 // 優先使用 File System Access API
@@ -1521,18 +1705,15 @@
 
                         for (let i = 0; i < images.length; i++) {
                             const imgObj = images[i];
-                            const originalName = imgObj.file.name;
-                            const ext = getNewExtension(originalName, targetFormat);
-
-                            let numStr = (i + startNum).toString();
-                            if (padZero) numStr = numStr.padStart(2, '0');
-                            const newName = `${prefix}${numStr}${suffix}${ext}`;
                             
+                            // === 修改：使用計算好的名稱 ===
+                            const info = allNames.find(x => x.id === imgObj.id);
+                            const newName = info.newName;
+                            // ===========================
+
                             const fileHandle = await newDirHandle.getFileHandle(newName, { create: true });
                             const writable = await fileHandle.createWritable();
-                            
                             const finalBlob = await processImage(imgObj.file, targetFormat, needClean);
-                            
                             await writable.write(finalBlob);
                             await writable.close();
 
@@ -1563,17 +1744,19 @@
         async function downloadAsZip(prefix, suffix, padZero, needClean, startNum, targetFormat) {
             showModal("處理中", "打包 ZIP (含轉檔)...", true);
             const progressBar = document.getElementById('progressBar');
+            const allNames = calculateAllNames();
+
             try {
                 const zip = new JSZip();
                 const folder = zip.folder("Renamed_Images");
+                
                 for (let i = 0; i < images.length; i++) {
                     const imgObj = images[i];
-                    const originalName = imgObj.file.name;
-                    const ext = getNewExtension(originalName, targetFormat);
-
-                    let numStr = (i + startNum).toString();
-                    if (padZero) numStr = numStr.padStart(2, '0');
-                    const newName = `${prefix}${numStr}${suffix}${ext}`;
+                    
+                    // === 修改：使用計算好的名稱 ===
+                    const info = allNames.find(x => x.id === imgObj.id);
+                    const newName = info.newName;
+                    // ===========================
                     
                     const finalBlob = await processImage(imgObj.file, targetFormat, needClean);
                     folder.file(newName, finalBlob);
