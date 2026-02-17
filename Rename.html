@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Visual Renamer (Web V30.2 - AG-PSD Fix 2)</title>
+    <title>Visual Renamer (Web V30.3 - AG-PSD Fix 2)</title>
     
     <!-- 引入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -639,7 +639,7 @@
                         </div>
                     </label>
                     <label class="flex items-center gap-2 cursor-pointer" title="移除 Exif 並重新編碼">
-                        <input type="checkbox" id="cleanMetaCheckbox" class="sr-only">
+                        <input type="checkbox" id="cleanMetaCheckbox" class="sr-only" checked>
                         <span class="text-[10px] uppercase font-bold text-zinc-500">清洗</span>
                         <div class="toggle-switch scale-75 origin-left">
                             <div class="toggle-dot"></div>
@@ -1359,35 +1359,41 @@
         async function processImage(file, targetFormat, needClean) {
             const isPsd = file.name.toLowerCase().endsWith('.psd');
 
-            // 1. 如果目標是原始格式，直接回傳檔案
-            if (targetFormat === 'original') {
+            // 【修正 1】：只有在「格式為原始」且「不需要清洗」時，才直接回傳原檔
+            if (targetFormat === 'original' && !needClean) {
                 return file; 
             }
 
+            // 【修正 2】：解析實際輸出的 MIME Type
+            // 如果選的是 original，我們需要抓取檔案原本的 type；
+            // 如果是 PSD，則強制設為 PSD 的 MIME，否則瀏覽器可能會給空值或錯誤
+            let outputMime = targetFormat;
+            if (targetFormat === 'original') {
+                if (isPsd) {
+                    outputMime = 'image/vnd.adobe.photoshop';
+                } else {
+                    outputMime = file.type || 'image/jpeg'; // 若抓不到 type 預設 fallback 為 jpg
+                }
+            }
+
             // 2. 如果目標是 PSD (匯出為 PSD)
-            if (targetFormat === 'image/vnd.adobe.photoshop') {
+            if (outputMime === 'image/vnd.adobe.photoshop') {
                  return new Promise(async (resolve, reject) => {
                     try {
-                        // 先將來源 (不論是圖片還是 PSD) 載入為 Canvas
                         const imgCanvas = await loadImageToCanvas(file);
                         
-                        // 建構 ag-psd 需要的物件結構
-                        // 這裡我們將圖片作為單一圖層寫入
                         const psdData = {
                             width: imgCanvas.width,
                             height: imgCanvas.height,
                             children: [
                                 {
                                     name: 'Layer 1',
-                                    canvas: imgCanvas // ag-psd 瀏覽器版支援直接傳入 HTMLCanvasElement
+                                    canvas: imgCanvas 
                                 }
                             ]
                         };
 
-                        // 寫入 PSD Buffer
                         const buffer = agPsd.writePsd(psdData);
-                        
-                        // 轉為 Blob
                         const blob = new Blob([buffer], { type: 'image/vnd.adobe.photoshop' });
                         resolve(blob);
                     } catch (err) {
@@ -1397,6 +1403,7 @@
             }
 
             // 3. 一般圖片轉檔 (JPG/PNG/WebP)
+            // 只要走到這裡，就會經過 Canvas 繪製 -> toBlob，這過程會自然移除 Exif
             return new Promise((resolve, reject) => {
                 let sourcePromise;
                 if (isPsd) {
@@ -1414,16 +1421,16 @@
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0);
                         
-                        let mimeType = targetFormat;
+                        // 使用修正後的 outputMime
                         let quality = 0.92;
-                        if (mimeType === 'image/jpeg' || mimeType === 'image/webp') {
+                        if (outputMime === 'image/jpeg' || outputMime === 'image/webp') {
                             quality = 0.92; 
                         }
 
                         canvas.toBlob(blob => {
                             if (blob) resolve(blob);
                             else reject(new Error("Canvas conversion failed"));
-                        }, mimeType, quality);
+                        }, outputMime, quality);
                     };
                     img.onerror = () => reject(new Error("Image loading failed"));
                     img.src = url;
