@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MomoYa - 故事宣傳圖產生器 (自動記憶參數版)</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: { slate: { 850: '#1e293b', 900: '#0f172a', 950: '#020617' }, accent: '#f43f5e', emerald: '#10b981', blue: '#3b82f6', amber: '#f59e0b', purple: '#a855f7' },
+                    animation: { 'slide-up': 'slideUp 0.4s ease-out', 'pop': 'pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)' }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body { background-color: #020617; color: #e2e8f0; font-family: 'Inter', system-ui, sans-serif; overflow-x: hidden; }
+        .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.4); border-radius: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(59, 130, 246, 0.4); border-radius: 8px; transition: all 0.3s; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(59, 130, 246, 0.8); }
+        
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; height: 16px; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 14px; width: 14px; border-radius: 50%; cursor: pointer; margin-top: -5px; box-shadow: 0 0 10px rgba(0,0,0,0.5); }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: #334155; border-radius: 2px; }
+        
+        .slider-blue::-webkit-slider-thumb { background: #3b82f6; box-shadow: 0 0 10px rgba(59, 130, 246, 0.5); }
+        .slider-rose::-webkit-slider-thumb { background: #f43f5e; box-shadow: 0 0 10px rgba(244, 63, 94, 0.5); }
+        .slider-amber::-webkit-slider-thumb { background: #f59e0b; box-shadow: 0 0 10px rgba(245, 158, 11, 0.5); }
+
+        input[type="color"] { -webkit-appearance: none; border: none; width: 28px; height: 28px; border-radius: 6px; cursor: pointer; padding: 0; background: transparent; }
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: 2px solid rgba(255,255,255,0.2); border-radius: 6px; }
+
+        .canvas-container {
+            background-image: linear-gradient(45deg, #0f172a 25%, transparent 25%), linear-gradient(-45deg, #0f172a 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #0f172a 75%), linear-gradient(-45deg, transparent 75%, #0f172a 75%);
+            background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        }
+        
+        .sortable-ghost { opacity: 0.4; transform: scale(0.95); }
+        .thumb-wrap { box-sizing: border-box; }
+        .min-h-dropzone { min-height: 70px; }
+        .thumb-wrap img { user-select: none; -webkit-user-drag: none; }
+        
+        /* 多選狀態樣式 */
+        .thumb-wrap.selected { box-shadow: 0 0 0 3px #10b981; border-color: transparent; filter: brightness(1.1); transform: translateY(-2px); }
+    </style>
+</head>
+<body class="flex flex-col h-screen relative selection:bg-blue-500/30">
+
+    <div id="global-drag-overlay" class="fixed inset-0 bg-blue-900/40 backdrop-blur-sm z-50 hidden flex-col items-center justify-center border-4 border-blue-500 border-dashed m-4 rounded-2xl pointer-events-none transition-opacity">
+        <i data-lucide="image-plus" class="w-20 h-20 text-blue-400 mb-4 animate-bounce"></i>
+        <h2 class="text-3xl font-bold text-white shadow-lg">放開滑鼠即可加入「普通圖片區」</h2>
+    </div>
+
+    <header class="h-14 flex items-center justify-between px-6 border-b border-slate-800/50 glass-panel z-10 flex-shrink-0">
+        <div class="flex items-center gap-3">
+            <div class="p-1.5 bg-blue-500/10 rounded-lg border border-blue-500/20"><i data-lucide="sparkles" class="w-5 h-5 text-blue-400"></i></div>
+            <h1 class="font-bold text-lg tracking-wide bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent">
+                故事宣傳圖產生器 <span class="text-[10px] text-slate-500 font-normal ml-2 border border-slate-700 rounded px-1.5 py-0.5">自動記憶參數版</span>
+            </h1>
+        </div>
+        
+        <div class="flex items-center gap-4">
+            <button id="resetConfigBtn" class="text-[11px] px-3 py-1.5 text-slate-300 bg-slate-800 hover:bg-slate-700 rounded border border-slate-600 transition-colors flex items-center gap-1.5">
+                <i data-lucide="rotate-ccw" class="w-3 h-3"></i> 重置所有參數
+            </button>
+            <div class="flex items-center gap-4 text-[11px] text-slate-400 bg-slate-900/50 px-3 py-1.5 rounded border border-slate-700/50">
+                <div class="flex items-center gap-1.5"><kbd class="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-600 font-mono text-slate-300">Ctrl</kbd>+<i data-lucide="mouse-pointer-click" class="w-3 h-3"></i> 多選拉動</div>
+                <div class="flex items-center gap-1.5"><kbd class="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-600 font-mono text-slate-300">Shift</kbd>+<i data-lucide="mouse-pointer-click" class="w-3 h-3"></i> 連選</div>
+                <div class="flex items-center gap-1.5 text-rose-400 font-bold"><i data-lucide="mouse-pointer-click" class="w-3 h-3 text-rose-400"></i> 滾輪中鍵 = 刪除圖片</div>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 p-4 flex flex-col lg:flex-row gap-4 overflow-hidden z-10">
+        
+        <aside class="w-full lg:w-[460px] flex flex-col gap-6 flex-shrink-0 animate-slide-up overflow-y-auto custom-scrollbar pb-6 pr-2">
+
+            <div class="flex flex-col gap-4 mt-2">
+                <div class="flex items-center justify-between text-slate-400 font-bold text-sm border-b border-slate-800 pb-2">
+                    <div class="flex items-center gap-2"><i data-lucide="layers" class="w-4 h-4 text-emerald-400"></i> 圖片管理區</div>
+                    <button id="clearBtn" class="hidden text-[10px] px-3 py-1.5 text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 rounded border border-rose-500/20 transition-colors flex items-center gap-1 shadow-lg">
+                        <i data-lucide="trash-2" class="w-3 h-3"></i> 清除全部圖片
+                    </button>
+                </div>
+
+                <div class="text-[10px] text-slate-500 mt-[-10px] flex flex-col gap-1">
+                    <p><i data-lucide="info" class="w-3 h-3 inline"></i> 提示：對縮圖點擊 <strong>右鍵</strong> 可強制裁切 3:4 / 4:3 比例</p>
+                    <p><i data-lucide="mouse-pointer-click" class="w-3 h-3 text-rose-400 inline"></i> 提示：對縮圖點擊 <strong>滑鼠中鍵</strong> 可直接刪除該圖</p>
+                </div>
+
+                <div class="glass-panel p-4 rounded-xl border border-blue-900/40 bg-blue-950/10 flex flex-col gap-3 relative">
+                    <h2 class="text-sm font-bold text-blue-400 flex items-center gap-2"><i data-lucide="image" class="w-4 h-4"></i> 普通圖片 (免費區)</h2>
+                    
+                    <div class="border border-dashed border-blue-800/50 rounded-lg p-2 flex flex-col items-center justify-center text-center cursor-pointer hover:border-blue-500 transition-colors bg-blue-950/30" onclick="document.getElementById('fileInputNormal').click()">
+                        <p class="text-[11px] text-blue-300/70"><i data-lucide="upload" class="w-3 h-3 inline mr-1"></i>點擊上傳普通圖片</p>
+                        <input type="file" id="fileInputNormal" class="hidden" multiple accept="image/*">
+                    </div>
+                    
+                    <div class="bg-slate-900/50 rounded border border-slate-800 p-2">
+                        <div id="list-normal" class="flex flex-wrap content-start gap-2 overflow-y-auto custom-scrollbar min-h-dropzone max-h-[140px]"></div>
+                    </div>
+                </div>
+
+                <div class="glass-panel p-4 rounded-xl border border-rose-900/40 bg-rose-950/20 flex flex-col gap-3 relative">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-sm font-bold text-rose-400 flex items-center gap-2"><i data-lucide="lock" class="w-4 h-4"></i> 付費圖片 (隱藏區)</h2>
+                        <span class="text-[10px] text-rose-400 bg-rose-950 px-2 py-0.5 rounded border border-rose-900" id="paidCounterBadge">0 張付費圖</span>
+                    </div>
+
+                    <div class="border border-dashed border-rose-900/50 rounded-lg p-2 flex flex-col items-center justify-center text-center cursor-pointer hover:border-rose-500 transition-colors bg-rose-950/30" onclick="document.getElementById('fileInputPaid').click()">
+                        <p class="text-[11px] text-rose-300/70"><i data-lucide="upload" class="w-3 h-3 inline mr-1"></i>點擊上傳付費圖片</p>
+                        <input type="file" id="fileInputPaid" class="hidden" multiple accept="image/*">
+                    </div>
+                    
+                    <div class="bg-slate-900/50 rounded border border-slate-800 p-2">
+                        <div id="list-paid" class="flex flex-wrap content-start gap-2 overflow-y-auto custom-scrollbar min-h-dropzone max-h-[140px]"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex flex-col gap-4 mt-2">
+                <div class="flex items-center gap-2 text-slate-400 font-bold text-sm border-b border-slate-800 pb-2">
+                    <i data-lucide="sliders" class="w-4 h-4 text-purple-400"></i> 參數控制區
+                </div>
+
+                <div class="glass-panel p-4 rounded-xl border border-emerald-900/30 bg-emerald-950/10 flex flex-col gap-3 transition-all" id="tuningPanel">
+                    <h2 class="text-sm font-bold text-emerald-400 flex items-center gap-2"><i data-lucide="crosshair" class="w-4 h-4"></i> 獨立座標微調</h2>
+                    <div class="text-[10px] text-slate-400" id="tune-hint">請在上方「單點選」一張圖片來解鎖座標微調。</div>
+                    
+                    <div id="tune-controls" class="opacity-30 pointer-events-none transition-opacity grid grid-cols-2 gap-4">
+                        <div>
+                            <div class="flex justify-between text-[10px] mb-1"><span class="text-slate-400">自訂 X 偏移</span><span id="tuneXVal" class="text-emerald-400 font-mono">0px</span></div>
+                            <input type="range" id="tuneXSlider" class="accent-emerald w-full" min="-400" max="400" value="0">
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-[10px] mb-1"><span class="text-slate-400">自訂 Y 偏移</span><span id="tuneYVal" class="text-emerald-400 font-mono">0px</span></div>
+                            <input type="range" id="tuneYSlider" class="accent-emerald w-full" min="-400" max="400" value="0">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-panel p-4 rounded-xl border border-blue-900/20 flex flex-col gap-4">
+                    <h2 class="text-sm font-bold text-blue-400 flex items-center gap-2"><i data-lucide="settings-2" class="w-4 h-4"></i> 普通區參數</h2>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <div class="flex justify-between text-[10px] mb-1"><span class="text-slate-400">群組起點 X</span><span id="nStartXVal" class="text-blue-300 font-mono">0px</span></div>
+                            <input type="range" data-group="normal" data-key="startX" class="ctrl-slider slider-blue" min="-2000" max="2000" value="0">
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-[10px] mb-1"><span class="text-slate-400">群組起點 Y</span><span id="nStartYVal" class="text-blue-300 font-mono">0px</span></div>
+                            <input type="range" data-group="normal" data-key="startY" class="ctrl-slider slider-blue" min="-2000" max="2000" value="0">
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-[10px] mb-1"><span class="text-slate-400">每張堆疊 X 距</span><span id="nStepXVal" class="text-blue-300 font-mono">80px</span></div>
+                            <input type="range" data-group="normal" data-key="stepX" class="ctrl-slider slider-blue" min="-500" max="500" value="80">
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-[10px] mb-1"><span class="text-slate-400">每張堆疊 Y 距</span><span id="nStepYVal" class="text-blue-300 font-mono">30px</span></div>
+                            <input type="range" data-group="normal" data-key="stepY" class="ctrl-slider slider-blue" min="-500" max="500" value="30">
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-[10px] mb-1"><span class="text-slate-400">大小比例</span><span id="nScaleVal" class="text-blue-300 font-mono">100%</span></div>
+                            <input type="range" data-group="normal" data-key="scale" class="ctrl-slider slider-blue" min="10" max="300" value="100">
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-[10px] mb-1"><span class="text-slate-400">旋轉角度</span><span id="nAngleVal" class="text-blue-300 font-mono">0°</span></div>
+                            <input type="range" data-group="normal" data-key="angle" class="ctrl-slider slider-blue" min="-180" max="180" value="0">
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-[10px] mb-1"><span class="text-slate-400">扇形展開遞增角</span><span id="nAngleStepVal" class="text-blue-300 font-mono">0°</span></div>
+                            <input type="range" data-group="normal" data-key="angleStep" class="ctrl-slider slider-blue" min="-45" max="45" value="0">
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-[10px] mb-1"><span class="text-slate-400">模糊度</span><span id="nBlurVal" class="text-blue-300 font-mono">0px</span></div>
+                            <input type="range" data-group="normal" data-key="blur" class="ctrl-slider slider-blue" min="0" max="50" value="0">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-panel p-4 rounded-xl border border-rose-900/20 flex flex-col gap-4">
+                    <h2 class="text-sm font-bold text-rose-400 flex items-center gap-2"><i data-lucide="settings-2" class="w-4 h-4"></i> 付費區參數</h2>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <div class="flex justify-between text-[10px] mb-1"><span class="text-slate-400">群組起點 X</span><span id="pStartXVal" class="text-rose-300 font-mono">600px</span></div>
+                            <input type="range" data-group="paid" data-key="startX" class="ctrl-slider slider-rose" min="-2000" max="2000" value="600">
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-[10px] mb-1"><span class="text-slate-400">群組起點 Y</span><span id="pStartYVal" class="text-rose-300 font-mono">0px</span></div>
+                            <input type="range" data-group="paid" data-key="startY" class="ctrl-slider slider-rose" min="-2000" max="2000" value="0">
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-[10px] mb-1"><span class="text-slate-400">每張堆疊 X 距</span><span id="pStepXVal" class="text-rose-300 font-mono">100px</span></div>
+                            <input type="range" data-group="paid" data-key="stepX" class="ctrl-slider slider-rose" min="-500" max="500" value="100">
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-[10px] mb-1"><span class="text-slate-400">每張堆疊 Y 距</span><span id="pStepYVal" class="text-rose-300 font-mono">50px</span></div>
+                            <input type="range" data-group="paid" data-key="stepY" class="ctrl-slider slider-rose" min="-500" max="500" value="50">
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-[10px] mb-1"><span class="text-slate-400">大小比例</span><span id="pScaleVal" class="text-rose-300 font-mono">100%</span></div>
+                            <input type="range" data-group="paid" data-key="scale" class="ctrl-slider slider-rose" min="10" max="300" value="100">
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-[10px] mb-1"><span class="text-slate-400">旋轉角度</span><span id="pAngleVal" class="text-rose-300 font-mono">15°</span></div>
+                            <input type="range" data-group="paid" data-key="angle" class="ctrl-slider slider-rose" min="-180" max="180" value="15">
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-[10px] mb-1"><span class="text-slate-400">扇形展開遞增角</span><span id="pAngleStepVal" class="text-rose-300 font-mono">2°</span></div>
+                            <input type="range" data-group="paid" data-key="angleStep" class="ctrl-slider slider-rose" min="-45" max="45" value="2">
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-[10px] mb-1"><span class="text-slate-400">模糊度</span><span id="pBlurVal" class="text-rose-300 font-mono">15px</span></div>
+                            <input type="range" data-group="paid" data-key="blur" class="ctrl-slider slider-rose" min="0" max="50" value="15">
+                        </div>
+                        <div class="col-span-2">
+                            <div class="flex justify-between text-[10px] mb-1"><span class="text-slate-400">暗色蒙版透明度</span><span id="pMaskVal" class="text-rose-300 font-mono">60%</span></div>
+                            <input type="range" data-group="paid" data-key="mask" class="ctrl-slider slider-rose" min="0" max="100" value="60">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-panel p-4 rounded-xl border border-amber-900/20 flex flex-col gap-4">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-sm font-bold text-amber-400 flex items-center gap-2"><i data-lucide="tag" class="w-4 h-4"></i> 徽章設定</h2>
+                        <label class="flex items-center gap-2 text-[11px] text-amber-300 cursor-pointer bg-amber-950/50 px-2 py-1 rounded border border-amber-900/50 hover:bg-amber-900/50 transition">
+                            <input type="checkbox" id="badgeVisibleCheck" class="accent-amber">
+                            顯示徽章
+                        </label>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-[10px] text-slate-400 mb-1">顯示文字 <span class="text-amber-500 font-bold">({n} = 付費張數)</span></label>
+                        <input type="text" id="badgeTextInput" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-xs text-white outline-none focus:border-amber-500">
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="col-span-2">
+                            <span class="block text-[10px] text-slate-400 mb-1">徽章圖層 (Z-Index)</span>
+                            <select id="badgeLayerSelect" class="bg-slate-900 border border-slate-700 rounded p-1.5 text-xs text-slate-300 w-full outline-none focus:border-amber-500 cursor-pointer">
+                                <option value="top">最上層 (蓋過所有圖片)</option>
+                                <option value="middle">中間層 (免費圖之下，付費圖之上)</option>
+                                <option value="bottom">最底層 (所有圖片之下)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-[10px] mb-1"><span class="text-slate-400">X 位置 (相對最後圖)</span><span id="bOffsetXVal" class="text-amber-300 font-mono">0px</span></div>
+                            <input type="range" data-group="badge" data-key="offsetX" class="ctrl-slider slider-amber" min="-1000" max="1000" value="0">
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-[10px] mb-1"><span class="text-slate-400">Y 位置 (相對最後圖)</span><span id="bOffsetYVal" class="text-amber-300 font-mono">0px</span></div>
+                            <input type="range" data-group="badge" data-key="offsetY" class="ctrl-slider slider-amber" min="-1000" max="1000" value="0">
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-[10px] mb-1"><span class="text-slate-400">大小比例</span><span id="bScaleVal" class="text-amber-300 font-mono">100%</span></div>
+                            <input type="range" data-group="badge" data-key="scale" class="ctrl-slider slider-amber" min="10" max="300" value="100">
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-[10px] mb-1"><span class="text-slate-400">旋轉角度</span><span id="bAngleVal" class="text-amber-300 font-mono">15°</span></div>
+                            <input type="range" data-group="badge" data-key="angle" class="ctrl-slider slider-amber" min="-180" max="180" value="15">
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <span class="text-[10px] text-slate-400">背景顏色</span>
+                            <input type="color" id="badgeColorInput" class="h-6 w-full">
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-[10px] mb-1"><span class="text-slate-400">背景透明度 (文字不變)</span><span id="bBgOpacityVal" class="text-amber-300 font-mono">90%</span></div>
+                            <input type="range" data-group="badge" data-key="bgOpacity" class="ctrl-slider slider-amber" min="0" max="100" value="90">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <button id="downloadBtn" class="glass-panel p-4 rounded-xl border border-green-500/30 bg-green-500/10 hover:bg-green-500/20 text-green-400 font-bold flex items-center justify-center gap-2 transition-all cursor-not-allowed opacity-50 mt-4">
+                <i data-lucide="download" class="w-5 h-5"></i> 匯出原尺寸 PNG
+            </button>
+        </aside>
+
+        <section class="flex-1 glass-panel rounded-xl border border-slate-700/50 flex flex-col overflow-hidden animate-slide-up relative" style="animation-delay: 0.1s;">
+            <div class="h-10 bg-slate-900/80 border-b border-slate-800 flex items-center justify-between px-4 z-10">
+                <span class="text-xs font-bold text-slate-400 flex items-center gap-2"><i data-lucide="monitor-play" class="w-4 h-4"></i> 即時預覽 (無限邊界，無損裁切)</span>
+            </div>
+            <div class="flex-1 canvas-container flex items-center justify-center p-4 overflow-auto relative">
+                <div id="canvas-empty" class="absolute flex flex-col items-center text-slate-500 pointer-events-none">
+                    <i data-lucide="layers" class="w-16 h-16 mb-4 opacity-30"></i>
+                    <p>請將圖片拖曳至網頁中</p>
+                </div>
+                <canvas id="previewCanvas" class="hidden shadow-2xl transition-transform max-w-full max-h-full object-contain"></canvas>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        lucide.createIcons();
+
+        // 預設參數 (用來重置與初次載入)
+        const DEFAULT_CONFIG = {
+            normal: { startX: 0, startY: 0, stepX: 80, stepY: 30, scale: 100, angle: 0, angleStep: 0, blur: 0 },
+            paid: { startX: 600, startY: 0, stepX: 100, stepY: 50, scale: 100, angle: 15, angleStep: 2, blur: 15, mask: 60 },
+            badge: { visible: true, layer: 'middle', text: "🔒 解鎖剩餘 {n} 張內容", offsetX: 0, offsetY: 0, scale: 100, angle: 15, color: "#f43f5e", bgOpacity: 90 }
+        };
+
+        // 嘗試從 localStorage 讀取歷史參數
+        let savedConfig = null;
+        try {
+            const raw = localStorage.getItem('momoYaConfig');
+            if (raw) savedConfig = JSON.parse(raw);
+        } catch (e) { console.error("無法讀取 LocalStorage", e); }
+
+        // 核心狀態庫
+        const state = { 
+            imageDict: {},   
+            normalIds: [],   
+            paidIds: [],     
+            selectedIds: new Set(), 
+            
+            // 優先使用已儲存的參數，若無則使用預設值
+            normal: { ...DEFAULT_CONFIG.normal, ...(savedConfig?.normal || {}) },
+            paid: { ...DEFAULT_CONFIG.paid, ...(savedConfig?.paid || {}) },
+            badge: { ...DEFAULT_CONFIG.badge, ...(savedConfig?.badge || {}) }
+        };
+
+        // 儲存設定至 LocalStorage 的函數
+        function saveConfigToStorage() {
+            const configToSave = { normal: state.normal, paid: state.paid, badge: state.badge };
+            localStorage.setItem('momoYaConfig', JSON.stringify(configToSave));
+        }
+
+        const fileInputNormal = document.getElementById('fileInputNormal');
+        const fileInputPaid = document.getElementById('fileInputPaid');
+        const listNormal = document.getElementById('list-normal');
+        const listPaid = document.getElementById('list-paid');
+        const previewCanvas = document.getElementById('previewCanvas');
+        const canvasEmpty = document.getElementById('canvas-empty');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const globalDragOverlay = document.getElementById('global-drag-overlay');
+        const paidCounterBadge = document.getElementById('paidCounterBadge');
+        const resetConfigBtn = document.getElementById('resetConfigBtn');
+        
+        const tuneControls = document.getElementById('tune-controls');
+        const tuneHint = document.getElementById('tune-hint');
+        const tuneXSlider = document.getElementById('tuneXSlider');
+        const tuneYSlider = document.getElementById('tuneYSlider');
+
+        // ==== 初始化 UI 參數顯示 ====
+        function initUIValues() {
+            document.querySelectorAll('.ctrl-slider').forEach(slider => {
+                const group = slider.dataset.group;
+                const key = slider.dataset.key;
+                if(state[group] && state[group][key] !== undefined) {
+                    slider.value = state[group][key];
+                    const unit = (key === 'scale' || key === 'mask' || key === 'bgOpacity') ? '%' : (key.includes('angle') ? '°' : 'px');
+                    const displayId = `${group.charAt(0)}${key.charAt(0).toUpperCase() + key.slice(1)}Val`;
+                    const displayEl = document.getElementById(displayId);
+                    if(displayEl) displayEl.textContent = state[group][key] + unit;
+                }
+            });
+            document.getElementById('badgeTextInput').value = state.badge.text;
+            document.getElementById('badgeColorInput').value = state.badge.color;
+            document.getElementById('badgeVisibleCheck').checked = state.badge.visible;
+            document.getElementById('badgeLayerSelect').value = state.badge.layer;
+        }
+
+        // 執行 UI 初始化
+        initUIValues();
+
+        // ==== 綁定所有參數拉桿 (觸發重繪與存檔) ====
+        document.querySelectorAll('.ctrl-slider').forEach(slider => {
+            slider.addEventListener('input', (e) => {
+                const group = e.target.dataset.group;
+                const key = e.target.dataset.key;
+                const val = parseInt(e.target.value);
+                state[group][key] = val;
+                
+                const unit = (key === 'scale' || key === 'mask' || key === 'bgOpacity') ? '%' : (key.includes('angle') ? '°' : 'px');
+                const displayId = `${group.charAt(0)}${key.charAt(0).toUpperCase() + key.slice(1)}Val`;
+                const displayEl = document.getElementById(displayId);
+                if(displayEl) displayEl.textContent = val + unit;
+
+                saveConfigToStorage();
+                scheduleRender();
+            });
+        });
+
+        document.getElementById('badgeTextInput').addEventListener('input', (e) => { state.badge.text = e.target.value; saveConfigToStorage(); scheduleRender(); });
+        document.getElementById('badgeColorInput').addEventListener('input', (e) => { state.badge.color = e.target.value; saveConfigToStorage(); scheduleRender(); });
+        document.getElementById('badgeVisibleCheck').addEventListener('change', (e) => { state.badge.visible = e.target.checked; saveConfigToStorage(); scheduleRender(); });
+        document.getElementById('badgeLayerSelect').addEventListener('change', (e) => { state.badge.layer = e.target.value; saveConfigToStorage(); scheduleRender(); });
+
+        // 重置參數按鈕
+        resetConfigBtn.addEventListener('click', () => {
+            if(confirm('確定要將所有參數恢復為預設值嗎？(已上傳的圖片不會消失)')) {
+                state.normal = JSON.parse(JSON.stringify(DEFAULT_CONFIG.normal));
+                state.paid = JSON.parse(JSON.stringify(DEFAULT_CONFIG.paid));
+                state.badge = JSON.parse(JSON.stringify(DEFAULT_CONFIG.badge));
+                saveConfigToStorage();
+                initUIValues();
+                scheduleRender();
+            }
+        });
+
+        // ==== 初始化 SortableJS (內建 MultiDrag 多選拉動) ====
+        try { if (window.Sortable && window.Sortable.MultiDrag) window.Sortable.mount(new window.Sortable.MultiDrag()); } catch(e) {}
+
+        function syncStateFromDOM() {
+            state.normalIds = Array.from(listNormal.children).map(el => el.dataset.id);
+            state.paidIds = Array.from(listPaid.children).map(el => el.dataset.id);
+            
+            paidCounterBadge.textContent = `${state.paidIds.length} 張付費圖`;
+            
+            updateThumbnailIndexes();
+            scheduleRender();
+            checkEmptyState();
+        }
+
+        function updateSelectionFromSortable() {
+            state.selectedIds.clear();
+            document.querySelectorAll('.thumb-wrap.selected').forEach(el => state.selectedIds.add(el.dataset.id));
+            updateSelectionUI();
+        }
+
+        const sortableOptions = {
+            group: 'shared-images', 
+            animation: 150, 
+            ghostClass: 'sortable-ghost', 
+            delay: 100, 
+            delayOnTouchOnly: true,
+            fallbackTolerance: 5,     
+            multiDrag: true,          
+            selectedClass: 'selected',
+            onEnd: syncStateFromDOM,
+            onSelect: updateSelectionFromSortable,
+            onDeselect: updateSelectionFromSortable
+        };
+        new Sortable(listNormal, sortableOptions);
+        new Sortable(listPaid, sortableOptions);
+
+        function updateThumbnailIndexes() {
+            listNormal.querySelectorAll('.idx-badge').forEach((b, i) => {
+                b.innerText = i + 1;
+                b.className = 'absolute top-0 left-0 bg-blue-900/90 text-blue-200 text-[9px] px-1.5 py-0.5 rounded-tl rounded-br pointer-events-none idx-badge border-b border-r border-blue-700';
+            });
+            listPaid.querySelectorAll('.idx-badge').forEach((b, i) => {
+                b.innerText = i + 1;
+                b.className = 'absolute top-0 left-0 bg-rose-900/90 text-rose-200 text-[9px] px-1.5 py-0.5 rounded-tl rounded-br pointer-events-none idx-badge border-b border-r border-rose-700';
+            });
+        }
+
+        function updateSelectionUI() {
+            if (state.selectedIds.size === 1) {
+                const singleId = Array.from(state.selectedIds)[0];
+                const imgObj = state.imageDict[singleId];
+                tuneHint.classList.add('hidden');
+                tuneControls.classList.remove('opacity-30', 'pointer-events-none');
+                tuneXSlider.value = imgObj.customX || 0;
+                tuneYSlider.value = imgObj.customY || 0;
+                document.getElementById('tuneXVal').textContent = `${imgObj.customX || 0}px`;
+                document.getElementById('tuneYVal').textContent = `${imgObj.customY || 0}px`;
+            } else {
+                tuneHint.classList.remove('hidden');
+                tuneHint.innerHTML = state.selectedIds.size > 1 ? "<span class='text-emerald-500'>⚠️ 多選模式下無法微調座標。</span>" : "請在上方「單點選」一張圖片來解鎖座標微調。";
+                tuneControls.classList.add('opacity-30', 'pointer-events-none');
+            }
+        }
+
+        // 獨立微調滑桿事件
+        tuneXSlider.addEventListener('input', (e) => {
+            if(state.selectedIds.size !== 1) return;
+            state.imageDict[Array.from(state.selectedIds)[0]].customX = parseInt(e.target.value);
+            document.getElementById('tuneXVal').textContent = `${e.target.value}px`; scheduleRender();
+        });
+        tuneYSlider.addEventListener('input', (e) => {
+            if(state.selectedIds.size !== 1) return;
+            state.imageDict[Array.from(state.selectedIds)[0]].customY = parseInt(e.target.value);
+            document.getElementById('tuneYVal').textContent = `${e.target.value}px`; scheduleRender();
+        });
+
+        // ==== 中鍵刪除核心邏輯 ====
+        function deleteImage(id) {
+            if (state.imageDict[id]) { URL.revokeObjectURL(state.imageDict[id].src); delete state.imageDict[id]; }
+            const el = document.querySelector(`.thumb-wrap[data-id="${id}"]`);
+            if (el) { el.classList.remove('selected'); el.remove(); }
+            state.selectedIds.delete(id);
+            updateSelectionUI();
+            syncStateFromDOM();
+        }
+
+        function deleteSelected() {
+            if (state.selectedIds.size === 0) return;
+            state.selectedIds.forEach(id => {
+                if (state.imageDict[id]) { URL.revokeObjectURL(state.imageDict[id].src); delete state.imageDict[id]; }
+                const el = document.querySelector(`.thumb-wrap[data-id="${id}"]`);
+                if (el) { el.classList.remove('selected'); el.remove(); }
+            });
+            state.selectedIds.clear();
+            updateSelectionUI();
+            syncStateFromDOM();
+        }
+
+        // 鍵盤全選與刪除支援
+        document.addEventListener('keydown', (e) => {
+            if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                e.preventDefault();
+                deleteSelected();
+            } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+                e.preventDefault();
+                document.querySelectorAll('.thumb-wrap').forEach(el => {
+                    if (window.Sortable && Sortable.utils) Sortable.utils.select(el);
+                    else el.classList.add('selected');
+                });
+                updateSelectionFromSortable();
+            } else if (e.key === 'Escape') {
+                document.querySelectorAll('.thumb-wrap.selected').forEach(el => {
+                    if (window.Sortable && Sortable.utils) Sortable.utils.deselect(el);
+                    else el.classList.remove('selected');
+                });
+                updateSelectionFromSortable();
+            }
+        });
+
+        // ==== 拖曳上傳 ====
+        const isFileDrag = (e) => e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files');
+        let dragCounter = 0;
+        document.addEventListener('dragenter', (e) => { if(isFileDrag(e)) { e.preventDefault(); dragCounter++; globalDragOverlay.classList.remove('hidden'); globalDragOverlay.classList.add('flex'); }});
+        document.addEventListener('dragleave', (e) => { if(isFileDrag(e)) { e.preventDefault(); dragCounter--; if (dragCounter === 0) { globalDragOverlay.classList.add('hidden'); globalDragOverlay.classList.remove('flex'); }}});
+        document.addEventListener('dragover', (e) => { if(isFileDrag(e)) e.preventDefault(); });
+        document.addEventListener('drop', (e) => { 
+            if(isFileDrag(e)) { e.preventDefault(); dragCounter = 0; globalDragOverlay.classList.add('hidden'); globalDragOverlay.classList.remove('flex'); handleFiles(e.dataTransfer.files, 'normal'); }
+        });
+        
+        fileInputNormal.addEventListener('change', (e) => { handleFiles(e.target.files, 'normal'); e.target.value = ''; });
+        fileInputPaid.addEventListener('change', (e) => { handleFiles(e.target.files, 'paid'); e.target.value = ''; });
+
+        clearBtn.addEventListener('click', () => {
+            Object.values(state.imageDict).forEach(img => URL.revokeObjectURL(img.src));
+            state.imageDict = {}; state.normalIds = []; state.paidIds = []; state.selectedIds.clear();
+            listNormal.innerHTML = ''; listPaid.innerHTML = '';
+            syncStateFromDOM();
+        });
+
+        function checkEmptyState() {
+            if (state.normalIds.length + state.paidIds.length === 0) {
+                previewCanvas.classList.add('hidden'); canvasEmpty.classList.remove('hidden'); clearBtn.classList.add('hidden');
+                downloadBtn.classList.add('cursor-not-allowed', 'opacity-50'); downloadBtn.classList.remove('hover:bg-green-500/20');
+            } else {
+                canvasEmpty.classList.add('hidden'); previewCanvas.classList.remove('hidden'); clearBtn.classList.remove('hidden');
+                downloadBtn.classList.remove('cursor-not-allowed', 'opacity-50'); downloadBtn.classList.add('hover:bg-green-500/20', 'cursor-pointer');
+            }
+        }
+
+        downloadBtn.addEventListener('click', () => {
+            if (state.normalIds.length + state.paidIds.length === 0) return;
+            const originalContent = downloadBtn.innerHTML;
+            downloadBtn.innerHTML = '<i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i> 匯出中...';
+            downloadBtn.classList.add('opacity-50', 'pointer-events-none');
+            setTimeout(() => {
+                const dataUrl = generateCanvas(true);
+                const link = document.createElement('a'); link.download = `momo-promo-${Date.now()}.png`; link.href = dataUrl; link.click();
+                downloadBtn.innerHTML = originalContent; downloadBtn.classList.remove('opacity-50', 'pointer-events-none'); lucide.createIcons();
+            }, 50);
+        });
+
+        function handleFiles(files, targetZone) {
+            const imageFiles = Array.from(files).filter(file => file.type.startsWith('image/'));
+            if (imageFiles.length === 0) return;
+
+            let loadedCount = 0;
+            imageFiles.forEach(file => {
+                const img = new Image();
+                img.onload = () => {
+                    const id = 'img_' + Math.random().toString(36).substr(2, 9);
+                    img.datasetId = id;
+                    img.forcedRatio = null; 
+                    state.imageDict[id] = img;
+                    
+                    if(targetZone === 'normal') state.normalIds.push(id);
+                    else state.paidIds.push(id);
+                    
+                    addThumbnail(img.src, id, targetZone);
+                    loadedCount++;
+                    
+                    if(loadedCount === imageFiles.length) {
+                        syncStateFromDOM();
+                        previewCanvas.classList.remove('animate-pop'); void previewCanvas.offsetWidth; previewCanvas.classList.add('animate-pop');
+                    }
+                };
+                img.src = URL.createObjectURL(file);
+            });
+        }
+
+        function addThumbnail(src, id, zone) {
+            const wrap = document.createElement('div');
+            wrap.className = 'thumb-wrap w-[60px] h-[60px] rounded border border-slate-600 flex-shrink-0 cursor-move relative transition-all bg-slate-800';
+            wrap.dataset.id = id; 
+            
+            // 防止中鍵點擊出現惱人的預設滾動游標
+            wrap.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); });
+
+            // 綁定中鍵刪除事件
+            wrap.addEventListener('auxclick', (e) => {
+                if (e.button === 1) { // 滑鼠中鍵
+                    e.preventDefault();
+                    if (state.selectedIds.has(id)) deleteSelected(); 
+                    else deleteImage(id); 
+                }
+            });
+            
+            // 綁定右鍵切換比例事件 (無損裁切)
+            wrap.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                const imgObj = state.imageDict[id];
+                
+                if (!imgObj.forcedRatio) imgObj.forcedRatio = '3:4';
+                else if (imgObj.forcedRatio === '3:4') imgObj.forcedRatio = '4:3';
+                else imgObj.forcedRatio = null;
+                
+                let ratioBadge = wrap.querySelector('.ratio-badge');
+                if (!ratioBadge) {
+                    ratioBadge = document.createElement('div');
+                    ratioBadge.className = 'absolute bottom-0 right-0 bg-purple-600/90 text-white text-[9px] px-1 py-0.5 rounded-tl rounded-br pointer-events-none ratio-badge';
+                    wrap.appendChild(ratioBadge);
+                }
+                
+                if (imgObj.forcedRatio) {
+                    ratioBadge.textContent = imgObj.forcedRatio;
+                    ratioBadge.classList.remove('hidden');
+                } else {
+                    ratioBadge.classList.add('hidden');
+                }
+                scheduleRender();
+            });
+
+            const imgEl = document.createElement('img'); imgEl.src = src; imgEl.className = 'w-full h-full object-cover rounded pointer-events-none'; 
+            const badge = document.createElement('div'); badge.className = 'absolute top-0 left-0 bg-black/80 text-white text-[9px] px-1.5 py-0.5 rounded-tl rounded-br pointer-events-none idx-badge';
+            
+            wrap.appendChild(imgEl); wrap.appendChild(badge); 
+            if (zone === 'normal') listNormal.appendChild(wrap);
+            else listPaid.appendChild(wrap);
+        }
+
+        let isRendering = false;
+        function scheduleRender() {
+            if (!isRendering) { isRendering = true; requestAnimationFrame(() => { generateCanvas(false); isRendering = false; }); }
+        }
+
+        // ==== 計算無損裁切 (Object-fit: cover 演算法) ====
+        function getCropData(img, forcedRatio) {
+            if (!forcedRatio) return { sx: 0, sy: 0, sw: img.width, sh: img.height };
+            const targetRatio = forcedRatio === '3:4' ? 3/4 : 4/3;
+            const imgRatio = img.width / img.height;
+            let sw, sh, sx, sy;
+            
+            if (imgRatio > targetRatio) {
+                sh = img.height; sw = sh * targetRatio; sx = (img.width - sw) / 2; sy = 0;
+            } else {
+                sw = img.width; sh = sw / targetRatio; sx = 0; sy = (img.height - sh) / 2;
+            }
+            return { sx, sy, sw, sh };
+        }
+
+        // 獨立繪製徽章
+        function drawBadge(targetCtx, badgeRender, shiftX, shiftY, globalScale) {
+            if (!state.badge.visible || !badgeRender) return;
+            
+            targetCtx.save();
+            targetCtx.translate(badgeRender.cx + shiftX, badgeRender.cy + shiftY);
+            targetCtx.rotate(badgeRender.angle * Math.PI / 180);
+
+            targetCtx.globalAlpha = state.badge.bgOpacity / 100;
+            targetCtx.fillStyle = state.badge.color;
+            targetCtx.shadowColor = 'rgba(0,0,0,0.5)';
+            targetCtx.shadowBlur = 20 * globalScale;
+            targetCtx.beginPath();
+            targetCtx.roundRect(-badgeRender.w/2, -badgeRender.h/2, badgeRender.w, badgeRender.h, 20 * globalScale);
+            targetCtx.fill();
+
+            targetCtx.globalAlpha = 1.0;
+            targetCtx.fillStyle = '#ffffff'; 
+            targetCtx.shadowColor = 'transparent';
+            targetCtx.textAlign = 'center';
+            targetCtx.textBaseline = 'middle';
+            targetCtx.font = `bold ${badgeRender.fontSize}px sans-serif`;
+            targetCtx.fillText(badgeRender.text, 0, 0);
+
+            targetCtx.restore();
+        }
+
+        // ==== 終極算圖引擎 ====
+        function generateCanvas(isExport = false) {
+            const totalCount = state.normalIds.length + state.paidIds.length;
+            if (totalCount === 0) return null;
+
+            const firstId = state.normalIds[0] || state.paidIds[0];
+            const baseImg = state.imageDict[firstId];
+            const baseCrop = getCropData(baseImg, baseImg.forcedRatio);
+            
+            let globalScale = 1;
+            if (!isExport) {
+                const maxDim = Math.max(baseCrop.sw, baseCrop.sh);
+                if (maxDim > 1000) globalScale = 1000 / maxDim;
+            }
+
+            const renderQueue = [];
+            
+            state.normalIds.forEach((id, i) => {
+                const img = state.imageDict[id];
+                const crop = getCropData(img, img.forcedRatio);
+                const drawW = crop.sw * globalScale * (state.normal.scale / 100);
+                const drawH = crop.sh * globalScale * (state.normal.scale / 100);
+                const cx = (state.normal.startX + i * state.normal.stepX) * globalScale + (drawW / 2) + ((img.customX || 0) * globalScale);
+                const cy = (state.normal.startY + i * state.normal.stepY) * globalScale + (drawH / 2) + ((img.customY || 0) * globalScale);
+                const angle = state.normal.angle + (i * state.normal.angleStep);
+                renderQueue.push({ type: 'normal', img, crop, cx, cy, w: drawW, h: drawH, angle, blur: state.normal.blur });
+            });
+
+            let lastPaidCX = 0, lastPaidCY = 0;
+            state.paidIds.forEach((id, i) => {
+                const img = state.imageDict[id];
+                const crop = getCropData(img, img.forcedRatio);
+                const drawW = crop.sw * globalScale * (state.paid.scale / 100);
+                const drawH = crop.sh * globalScale * (state.paid.scale / 100);
+                const cx = (state.paid.startX + i * state.paid.stepX) * globalScale + (drawW / 2) + ((img.customX || 0) * globalScale);
+                const cy = (state.paid.startY + i * state.paid.stepY) * globalScale + (drawH / 2) + ((img.customY || 0) * globalScale);
+                const angle = state.paid.angle + (i * state.paid.angleStep);
+                renderQueue.push({ type: 'paid', img, crop, cx, cy, w: drawW, h: drawH, angle, blur: state.paid.blur });
+                
+                if (i === state.paidIds.length - 1) { lastPaidCX = cx; lastPaidCY = cy; }
+            });
+
+            let badgeRender = null;
+            if (totalCount > 0 && state.badge.visible) {
+                const refCX = state.paidIds.length > 0 ? lastPaidCX : renderQueue[renderQueue.length-1].cx;
+                const refCY = state.paidIds.length > 0 ? lastPaidCY : renderQueue[renderQueue.length-1].cy;
+
+                const badgeText = state.badge.text.replace('{n}', state.paidIds.length);
+                const fontSize = 48 * globalScale * (state.badge.scale / 100);
+                
+                const tmpCtx = document.createElement('canvas').getContext('2d');
+                tmpCtx.font = `bold ${fontSize}px sans-serif`;
+                const textWidth = tmpCtx.measureText(badgeText).width;
+                
+                const drawW = textWidth + (120 * globalScale * (state.badge.scale / 100));
+                const drawH = 110 * globalScale * (state.badge.scale / 100);
+                const cx = refCX + (state.badge.offsetX * globalScale);
+                const cy = refCY + (state.badge.offsetY * globalScale);
+                
+                badgeRender = { type: 'badge', text: badgeText, cx, cy, w: drawW, h: drawH, angle: state.badge.angle, fontSize };
+            }
+
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            function updateBounds(cx, cy, w, h, angleDeg) {
+                const rad = angleDeg * Math.PI / 180;
+                const cos = Math.cos(rad); const sin = Math.sin(rad);
+                const dx = w / 2; const dy = h / 2;
+                const pts = [ {x: -dx, y: -dy}, {x: dx, y: -dy}, {x: dx, y: dy}, {x: -dx, y: dy} ];
+                pts.forEach(p => {
+                    const x = cx + p.x * cos - p.y * sin; const y = cy + p.x * sin + p.y * cos;
+                    if (x < minX) minX = x; if (x > maxX) maxX = x;
+                    if (y < minY) minY = y; if (y > maxY) maxY = y;
+                });
+            }
+
+            renderQueue.forEach(item => updateBounds(item.cx, item.cy, item.w, item.h, item.angle));
+            if (badgeRender) updateBounds(badgeRender.cx, badgeRender.cy, badgeRender.w, badgeRender.h, badgeRender.angle);
+
+            const padding = 150 * globalScale;
+            minX -= padding; minY -= padding; maxX += padding; maxY += padding;
+            const canvasW = maxX - minX; const canvasH = maxY - minY;
+            const shiftX = -minX; const shiftY = -minY;
+
+            const targetCanvas = isExport ? document.createElement('canvas') : previewCanvas;
+            targetCanvas.width = canvasW; targetCanvas.height = canvasH;
+            const targetCtx = targetCanvas.getContext('2d');
+            targetCtx.clearRect(0, 0, canvasW, canvasH);
+
+            const normalItems = renderQueue.filter(i => i.type === 'normal');
+            const paidItems = renderQueue.filter(i => i.type === 'paid');
+
+            if (state.badge.layer === 'bottom') drawBadge(targetCtx, badgeRender, shiftX, shiftY, globalScale);
+
+            if (paidItems.length > 0) {
+                const bgCanvas = document.createElement('canvas');
+                bgCanvas.width = canvasW; bgCanvas.height = canvasH;
+                const bgCtx = bgCanvas.getContext('2d');
+
+                paidItems.forEach(item => {
+                    bgCtx.save();
+                    bgCtx.translate(item.cx + shiftX, item.cy + shiftY);
+                    bgCtx.rotate(item.angle * Math.PI / 180);
+                    
+                    bgCtx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+                    bgCtx.shadowBlur = 30 * globalScale;
+                    bgCtx.shadowOffsetX = 15 * globalScale;
+                    bgCtx.shadowOffsetY = 15 * globalScale;
+                    
+                    bgCtx.drawImage(item.img, item.crop.sx, item.crop.sy, item.crop.sw, item.crop.sh, -item.w/2, -item.h/2, item.w, item.h);
+
+                    if(state.paid.mask > 0) {
+                        bgCtx.shadowColor = 'transparent';
+                        bgCtx.fillStyle = `rgba(15, 23, 42, ${state.paid.mask / 100})`;
+                        bgCtx.fillRect(-item.w/2, -item.h/2, item.w, item.h);
+                    }
+                    bgCtx.restore();
+                });
+
+                if (state.paid.blur > 0) targetCtx.filter = `blur(${state.paid.blur * globalScale}px)`;
+                targetCtx.drawImage(bgCanvas, 0, 0);
+                targetCtx.filter = 'none';
+            }
+
+            if (state.badge.layer === 'middle') drawBadge(targetCtx, badgeRender, shiftX, shiftY, globalScale);
+
+            if (normalItems.length > 0) {
+                const normCanvas = document.createElement('canvas');
+                normCanvas.width = canvasW; normCanvas.height = canvasH;
+                const normCtx = normCanvas.getContext('2d');
+
+                normalItems.forEach(item => {
+                    normCtx.save();
+                    normCtx.translate(item.cx + shiftX, item.cy + shiftY);
+                    normCtx.rotate(item.angle * Math.PI / 180);
+                    
+                    normCtx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+                    normCtx.shadowBlur = 20 * globalScale;
+                    normCtx.shadowOffsetX = 10 * globalScale;
+                    normCtx.shadowOffsetY = 10 * globalScale;
+                    
+                    normCtx.drawImage(item.img, item.crop.sx, item.crop.sy, item.crop.sw, item.crop.sh, -item.w/2, -item.h/2, item.w, item.h);
+                    normCtx.restore();
+                });
+
+                if (state.normal.blur > 0) targetCtx.filter = `blur(${state.normal.blur * globalScale}px)`;
+                targetCtx.drawImage(normCanvas, 0, 0);
+                targetCtx.filter = 'none';
+            }
+
+            if (state.badge.layer === 'top') drawBadge(targetCtx, badgeRender, shiftX, shiftY, globalScale);
+
+            if (isExport) return targetCanvas.toDataURL('image/png');
+        }
+    </script>
+</body>
+</html>
