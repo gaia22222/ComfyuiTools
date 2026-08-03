@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Promo Text Generator (Web V2.0)</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        bg: {
+                            main: '#09090b',    
+                            panel: '#18181b',   
+                        },
+                        accent: {
+                            DEFAULT: '#3b82f6', 
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #09090b;
+            color: #e4e4e7;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent; 
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #3f3f46; 
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #52525b; 
+        }
+
+        .input-focus-ring:focus-within {
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+            border-color: #3b82f6;
+        }
+        
+        .custom-select {
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+            background-position: right 0.5rem center;
+            background-repeat: no-repeat;
+            background-size: 1.5em 1.5em;
+            padding-right: 2rem;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        .form-input {
+            width: 100%;
+            background-color: #27272a;
+            border: 1px solid #3f3f46;
+            color: #e4e4e7;
+            font-size: 0.875rem;
+            border-radius: 0.375rem;
+            padding: 0.5rem 0.75rem;
+            transition: all 0.2s;
+            outline: none;
+        }
+        .form-input:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        }
+        
+        #outputText {
+            transition: all 0.3s ease;
+        }
+
+        /* 標籤按鈕特效 */
+        .tag-btn {
+            background-color: rgba(59, 130, 246, 0.15);
+            color: #93c5fd;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            transition: all 0.2s;
+        }
+        .tag-btn:hover {
+            background-color: rgba(59, 130, 246, 0.3);
+            color: #fff;
+        }
+    </style>
+</head>
+<body class="flex flex-col h-screen overflow-hidden text-sm">
+
+    <header class="h-14 bg-bg-panel border-b border-zinc-800 flex items-center justify-between px-6 shrink-0 z-30 shadow-sm">
+        <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2 text-zinc-100 font-semibold tracking-wide text-lg">
+                <svg class="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                Promo Text Generator
+            </div>
+            <span class="px-1.5 py-0.5 rounded text-[10px] bg-zinc-800 text-zinc-500 border border-zinc-700">V2.0 (Template Engine)</span>
+        </div>
+    </header>
+
+    <div class="flex-1 flex flex-col md:flex-row overflow-hidden bg-bg-main relative">
+        
+        <div class="w-full md:w-80 bg-bg-panel border-r border-zinc-800 flex flex-col z-20 shrink-0">
+            <div class="h-10 border-b border-zinc-800 flex items-center px-5 text-xs font-semibold text-zinc-500 uppercase tracking-wider select-none bg-zinc-900/50">
+                參數設定 (Parameters)
+            </div>
+            
+            <div class="flex-1 overflow-y-auto p-5 custom-scrollbar space-y-5">
+                
+                <div class="space-y-1.5">
+                    <label class="text-[11px] text-accent font-bold uppercase tracking-wider">作品系列</label>
+                    <select id="seriesSelect" class="form-input custom-select font-medium text-sm">
+                        <option value="O">【O-系列】特別事件/精華場景</option>
+                        <option value="S">【S-系列】一般劇情/敗北事件</option>
+                    </select>
+                </div>
+
+                <div class="space-y-1.5">
+                    <label class="text-[11px] text-zinc-400 font-bold uppercase tracking-wider">序號 (Number)</label>
+                    <input type="text" id="numInput" value="01" placeholder="例如：01" class="form-input font-mono">
+                </div>
+
+                <div class="space-y-1.5">
+                    <label class="text-[11px] text-zinc-400 font-bold uppercase tracking-wider">作品名稱 (Title)</label>
+                    <input type="text" id="titleInput" value="作品名稱" placeholder="輸入作品標題..." class="form-input">
+                </div>
+
+                <div class="space-y-1.5">
+                    <label class="text-[11px] text-zinc-400 font-bold uppercase tracking-wider" id="totalLabel">總頁數 / 枚數</label>
+                    <input type="number" id="totalInput" value="14" min="1" class="form-input font-mono">
+                </div>
+
+                <div class="space-y-1.5" id="bonusContainer">
+                    <label class="text-[11px] text-zinc-400 font-bold uppercase tracking-wider">額外解鎖 (Bonus)</label>
+                    <input type="number" id="bonusInput" value="2" min="0" class="form-input font-mono">
+                </div>
+
+            </div>
+        </div>
+
+        <div class="flex-1 flex flex-col bg-bg-main relative p-4 md:p-6">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-sm font-semibold text-zinc-300 flex items-center gap-2">
+                    <svg class="w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"></path></svg>
+                    <span id="previewTitle">生成預覽 (Preview Mode)</span>
+                </h2>
+                
+                <div class="flex items-center gap-2">
+                    <button onclick="toggleEditMode()" id="editBtn" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-400 border border-zinc-700 text-xs font-medium py-2 px-3 rounded-md transition flex items-center gap-1.5 active:scale-95" title="切換編輯模式以自訂模板">
+                        <svg id="modeIcon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                        </svg>
+                        <span id="editBtnText">編輯模板</span>
+                    </button>
+
+                    <button onclick="copyText()" id="copyBtn" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium py-2 px-4 rounded-md transition shadow-lg shadow-indigo-900/30 flex items-center gap-2 active:scale-95">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path></svg>
+                        <span>複製結果</span>
+                    </button>
+                </div>
+            </div>
+
+            <div id="editToolbar" class="hidden mb-2 p-2 bg-zinc-900 border border-zinc-700 rounded-md flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span class="text-[11px] text-zinc-500 font-bold ml-1 mr-2">點擊插入變數：</span>
+                    <button onclick="insertTag('{{序號}}')" class="tag-btn text-[11px] font-mono px-2 py-1 rounded">序號</button>
+                    <button onclick="insertTag('{{標題}}')" class="tag-btn text-[11px] font-mono px-2 py-1 rounded">標題</button>
+                    <button onclick="insertTag('{{總數}}')" class="tag-btn text-[11px] font-mono px-2 py-1 rounded">總數</button>
+                    <button onclick="insertTag('{{額外}}')" class="tag-btn text-[11px] font-mono px-2 py-1 rounded" id="btnTagBonus">額外</button>
+                </div>
+                <button onclick="resetTemplate()" class="text-[11px] text-red-400 hover:text-red-300 px-2 py-1 hover:bg-red-900/20 rounded transition">
+                    ↻ 恢復預設模板
+                </button>
+            </div>
+
+            <textarea id="outputText" readonly class="flex-1 w-full bg-[#18181b] border border-zinc-700 rounded-lg p-5 text-zinc-300 text-[13px] leading-relaxed font-mono custom-scrollbar resize-none focus:outline-none shadow-inner"></textarea>
+            
+            <div id="toast" class="absolute bottom-10 left-1/2 transform -translate-x-1/2 bg-green-500 text-white px-4 py-2 rounded shadow-lg text-sm font-bold opacity-0 transition-opacity duration-300 pointer-events-none">
+                已複製到剪貼簿！
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // === 預設模板庫 ===
+        const headerLinks = `Pixiv : https://www.pixiv.net/users/114240684\n<span style="color:#fe3a20;">Unifans :</span> https://x.gd/hZ2Hz \n<span style="color:#d9944f;">Ko-fi :</span> https://x.gd/Jy6EC\n\n------------------------------------------------\n\n`;
+        const divider = `\n------------------------------------------------\n\n`;
+
+        const DEFAULT_TEMPLATES = {
+            O: headerLinks + 
+`【O-{{序號}}】{{標題}} 共 {{總數}} 枚插圖！
+
+購買完整版，即可解鎖額外 {{額外}} 張專屬的 Omake 插畫！
+【O-系列】主打「精華場景」與「特別事件」，通常收錄本篇結束後的後續發展。
+
+✦ 內容資訊 ✦
+• 數量標示：共 {{總數}} 枚插圖 ＋ 額外 {{額外}} 枚內容
+• 檔案內容：包含「無台詞版」、「完整版」及「額外內容」
+
+如果想看更多精彩內容，歡迎前往平台選購支持！` + divider + 
+`【O-{{序號}}】{{標題}} 全 {{總數}} 枚！
+
+完全版をご購入いただくと、さらに {{額外}}枚 の限定 Omake イラストがお楽しみいただけます！
+【O-シリーズ】は「ハイライトシーン」や「特別イベント」をメインとし、本編終了後の展開を収録しています。
+
+✦ コンテンツ情報 ✦
+• 数量表示：全 {{總數}} 枚 ＋ 追加コンテンツ {{額外}} 枚
+• コンテンツ内容：「クリーン版」「完全版」および「追加コンテンツ」を収録
+
+もっとたくさんの作品を楽しみたい方は、ぜひプラットフォームにてお求めください！` + divider + 
+`【O-{{序號}}】{{標題}} Total {{總數}} Images!
+
+Purchase the full version to unlock {{額外}} additional exclusive Omake illustrations!
+The [O-Series] focuses on "highlight scenes" and "special events," featuring aftermaths following the main story.
+
+✦ Content Info ✦
+• Quantity Indicator: {{總數}} images + {{額外}} bonus images
+• Content Included: Includes "Textless", "Complete", and "Bonus" content
+
+If you'd like to see more exciting content, please visit the platform to check it out!`,
+
+            S: headerLinks + 
+`【S-{{序號}}】{{標題}} 總頁數共 {{總數}} 頁！
+
+完整版收錄了未公開的劇情，帶給你最完整的觀看體驗！
+
+✦ 完整版資訊 ✦
+• 數量標示：總頁數共 {{總數}} 頁
+• 檔案內容：包含「無台詞版」、「完整版」內容
+
+如果想看更多精彩內容，歡迎前往平台選購支持！` + divider + 
+`【S-{{序號}}】{{標題}} 総ページ数 {{總數}} ページ！
+
+完全版では未公開のストーリーを収録しており、最高の閲覧体験をお届けします！
+
+✦ 完全版情報 ✦
+• 数量表示：総ページ数 {{總數}} ページ
+• コンテンツ内容：「クリーン版」と「完全版」を収録
+
+もっとたくさんの作品を楽しみたい方は、ぜひプラットフォームにてお求めください！` + divider + 
+`【S-{{序號}}】{{標題}} Total {{總數}} Pages!
+
+The full version includes the completely unpublished story, bringing you the most complete viewing experience!
+
+✦ Full Version Info ✦
+• Quantity Indicator: Total {{總數}} pages
+• Content Included: Includes "Textless" and "Complete" versions
+
+If you'd like to see more exciting content, please visit the platform to check it out!`
+        };
+
+        // === 狀態變數 ===
+        let isEditMode = false; // false = 預覽模式, true = 編輯模式
+        let currentTemplates = { O: "", S: "" };
+
+        // === DOM 綁定 ===
+        const seriesSelect = document.getElementById('seriesSelect');
+        const numInput = document.getElementById('numInput');
+        const titleInput = document.getElementById('titleInput');
+        const totalInput = document.getElementById('totalInput');
+        const bonusInput = document.getElementById('bonusInput');
+        
+        const outputText = document.getElementById('outputText');
+        const editToolbar = document.getElementById('editToolbar');
+        const btnTagBonus = document.getElementById('btnTagBonus');
+        const previewTitle = document.getElementById('previewTitle');
+        const editBtn = document.getElementById('editBtn');
+        const editBtnText = document.getElementById('editBtnText');
+        const modeIcon = document.getElementById('modeIcon');
+        const toast = document.getElementById('toast');
+
+        // === 初始化與儲存 ===
+        function loadSettings() {
+            // 載入左側參數
+            if (localStorage.getItem('promo_series')) seriesSelect.value = localStorage.getItem('promo_series');
+            if (localStorage.getItem('promo_num')) numInput.value = localStorage.getItem('promo_num');
+            if (localStorage.getItem('promo_title')) titleInput.value = localStorage.getItem('promo_title');
+            if (localStorage.getItem('promo_total')) totalInput.value = localStorage.getItem('promo_total');
+            if (localStorage.getItem('promo_bonus')) bonusInput.value = localStorage.getItem('promo_bonus');
+            
+            // 載入模板，若無則使用預設
+            currentTemplates.O = localStorage.getItem('promo_tpl_O') || DEFAULT_TEMPLATES.O;
+            currentTemplates.S = localStorage.getItem('promo_tpl_S') || DEFAULT_TEMPLATES.S;
+
+            updateLeftUI();
+            renderView();
+        }
+
+        function saveInputs() {
+            localStorage.setItem('promo_series', seriesSelect.value);
+            localStorage.setItem('promo_num', numInput.value);
+            localStorage.setItem('promo_title', titleInput.value);
+            localStorage.setItem('promo_total', totalInput.value);
+            localStorage.setItem('promo_bonus', bonusInput.value);
+        }
+
+        // 當文字框被手動編輯時，儲存當前的模板
+        outputText.addEventListener('input', () => {
+            if (isEditMode) {
+                const series = seriesSelect.value;
+                currentTemplates[series] = outputText.value;
+                localStorage.setItem(`promo_tpl_${series}`, outputText.value);
+            }
+        });
+
+        // 左側參數變動時
+        [seriesSelect, numInput, titleInput, totalInput, bonusInput].forEach(input => {
+            input.addEventListener('input', () => {
+                saveInputs();
+                updateLeftUI();
+                renderView(); // 無論預覽或編輯模式都重新渲染（以載入對應系列的內容）
+            });
+        });
+
+        // === 核心邏輯 ===
+
+        function updateLeftUI() {
+            const series = seriesSelect.value;
+            if (series === 'O') {
+                document.getElementById('bonusContainer').style.display = 'block';
+                document.getElementById('totalLabel').innerText = "總枚數 (Images)";
+                btnTagBonus.style.display = 'inline-block';
+            } else {
+                document.getElementById('bonusContainer').style.display = 'none';
+                document.getElementById('totalLabel').innerText = "總頁數 (Pages)";
+                btnTagBonus.style.display = 'none';
+            }
+        }
+
+        // 決定右側顯示什麼：編譯後的文字，或是原始模板
+        function renderView() {
+            const series = seriesSelect.value;
+            let rawTemplate = currentTemplates[series];
+
+            if (isEditMode) {
+                // 編輯模式：顯示原始模板，允許使用者修改
+                outputText.value = rawTemplate;
+            } else {
+                // 預覽模式：替換掉所有的變數標籤
+                let compiledText = rawTemplate
+                    .replace(/{{序號}}/g, numInput.value.trim() || '01')
+                    .replace(/{{標題}}/g, titleInput.value.trim() || '作品名稱')
+                    .replace(/{{總數}}/g, totalInput.value || '0')
+                    .replace(/{{額外}}/g, bonusInput.value || '0');
+                
+                outputText.value = compiledText;
+            }
+        }
+
+        function toggleEditMode() {
+            isEditMode = !isEditMode;
+            
+            if (isEditMode) {
+                // 切換至編輯模式
+                outputText.readOnly = false;
+                outputText.classList.add('ring-2', 'ring-green-500/50', 'border-green-500', 'bg-zinc-900');
+                outputText.classList.remove('bg-[#18181b]');
+                
+                editToolbar.classList.remove('hidden');
+                previewTitle.innerText = "編輯模板 (Template Editor)";
+                previewTitle.classList.replace('text-zinc-300', 'text-green-400');
+                
+                editBtnText.innerText = '返回預覽';
+                editBtn.classList.replace('bg-zinc-800', 'bg-green-600');
+                editBtn.classList.replace('hover:bg-zinc-700', 'hover:bg-green-500');
+                editBtn.classList.replace('text-zinc-400', 'text-white');
+                
+                modeIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>`;
+            } else {
+                // 切換至預覽模式
+                outputText.readOnly = true;
+                outputText.classList.remove('ring-2', 'ring-green-500/50', 'border-green-500', 'bg-zinc-900');
+                outputText.classList.add('bg-[#18181b]');
+                
+                editToolbar.classList.add('hidden');
+                previewTitle.innerText = "生成預覽 (Preview Mode)";
+                previewTitle.classList.replace('text-green-400', 'text-zinc-300');
+                
+                editBtnText.innerText = '編輯模板';
+                editBtn.classList.replace('bg-green-600', 'bg-zinc-800');
+                editBtn.classList.replace('hover:bg-green-500', 'hover:bg-zinc-700');
+                editBtn.classList.replace('text-white', 'text-zinc-400');
+                
+                modeIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>`;
+            }
+            
+            renderView();
+        }
+
+        // 插入變數標籤到游標位置
+        function insertTag(tag) {
+            if (!isEditMode) return;
+            
+            const start = outputText.selectionStart;
+            const end = outputText.selectionEnd;
+            const text = outputText.value;
+            
+            // 插入標籤
+            const newText = text.substring(0, start) + tag + text.substring(end, text.length);
+            outputText.value = newText;
+            
+            // 恢復游標位置並聚焦
+            outputText.selectionStart = outputText.selectionEnd = start + tag.length;
+            outputText.focus();
+            
+            // 同步儲存
+            const series = seriesSelect.value;
+            currentTemplates[series] = newText;
+            localStorage.setItem(`promo_tpl_${series}`, newText);
+        }
+
+        // 恢復預設模板
+        function resetTemplate() {
+            if (!confirm('確定要清除自訂內容，恢復為最初的預設模板嗎？')) return;
+            
+            const series = seriesSelect.value;
+            currentTemplates[series] = DEFAULT_TEMPLATES[series];
+            localStorage.setItem(`promo_tpl_${series}`, DEFAULT_TEMPLATES[series]);
+            renderView();
+        }
+
+        // 複製結果
+        function copyText() {
+            // 如果在編輯模式下按複製，我們會先偷偷把它變成預覽文案再複製
+            const textToCopy = isEditMode 
+                ? currentTemplates[seriesSelect.value]
+                    .replace(/{{序號}}/g, numInput.value.trim() || '01')
+                    .replace(/{{標題}}/g, titleInput.value.trim() || '作品名稱')
+                    .replace(/{{總數}}/g, totalInput.value || '0')
+                    .replace(/{{額外}}/g, bonusInput.value || '0')
+                : outputText.value;
+
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                toast.style.opacity = '1';
+                setTimeout(() => { toast.style.opacity = '0'; }, 2000);
+            });
+        }
+
+        // 啟動
+        window.onload = loadSettings;
+    </script>
+</body>
+</html>

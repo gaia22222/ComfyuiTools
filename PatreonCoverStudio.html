@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Patreon Cover Studio — Editorial Story</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0a090c;
+      --panel: #121015;
+      --panel-2: #19161d;
+      --line: #302936;
+      --text: #f8f4fa;
+      --muted: #aaa0af;
+      --accent: #c345df;
+    }
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 78% 16%, rgba(195, 69, 223, .08), transparent 28%),
+        var(--bg);
+      color: var(--text);
+      font-family: Inter, "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
+    }
+    button, input, select { font: inherit; }
+    button, .file-button { -webkit-tap-highlight-color: transparent; }
+    .app-shell {
+      display: grid;
+      grid-template-columns: 330px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+    .sidebar {
+      background: rgba(15, 13, 18, .96);
+      border-right: 1px solid var(--line);
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .brand {
+      border-bottom: 1px solid var(--line);
+      padding: 22px 22px 18px;
+    }
+    .eyebrow {
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+    }
+    h1 {
+      font-family: Georgia, "Times New Roman", "Noto Serif TC", serif;
+      font-size: 25px;
+      font-weight: 400;
+      letter-spacing: -.035em;
+      margin: 5px 0 4px;
+    }
+    .brand p {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+      margin: 0;
+    }
+    .controls {
+      display: flex;
+      flex: 1;
+      flex-direction: column;
+      gap: 18px;
+      overflow-y: auto;
+      padding: 18px 22px 24px;
+    }
+    .control-section {
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 18px;
+    }
+    .control-section:last-child { border-bottom: 0; }
+    .section-title {
+      align-items: center;
+      display: flex;
+      font-size: 12px;
+      font-weight: 700;
+      justify-content: space-between;
+      letter-spacing: .08em;
+      margin: 0 0 12px;
+      text-transform: uppercase;
+    }
+    .field {
+      display: grid;
+      gap: 7px;
+      margin-top: 11px;
+    }
+    .field:first-of-type { margin-top: 0; }
+    .field-head {
+      align-items: center;
+      color: var(--muted);
+      display: flex;
+      font-size: 12px;
+      justify-content: space-between;
+    }
+    .field-head output {
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+    input[type="text"], input[type="number"], select {
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--text);
+      min-width: 0;
+      outline: none;
+      padding: 9px 10px;
+      width: 100%;
+    }
+    input[type="text"]:focus, input[type="number"]:focus, select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent), transparent 78%);
+    }
+    input[type="range"] {
+      accent-color: var(--accent);
+      cursor: pointer;
+      margin: 0;
+      width: 100%;
+    }
+    input[type="color"] {
+      background: transparent;
+      border: 0;
+      cursor: pointer;
+      height: 34px;
+      padding: 0;
+      width: 100%;
+    }
+    .ratio-group {
+      display: grid;
+      gap: 7px;
+      grid-template-columns: repeat(3, 1fr);
+    }
+    .ratio-button, .ghost-button, .primary-button, .file-button {
+      align-items: center;
+      border-radius: 8px;
+      cursor: pointer;
+      display: inline-flex;
+      justify-content: center;
+      min-height: 38px;
+      padding: 8px 11px;
+      text-align: center;
+    }
+    .ratio-button, .ghost-button {
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      color: var(--text);
+    }
+    .ratio-button[aria-pressed="true"] {
+      background: color-mix(in srgb, var(--accent), #17121b 74%);
+      border-color: var(--accent);
+    }
+    .primary-button, .file-button {
+      background: var(--accent);
+      border: 1px solid var(--accent);
+      color: #160e19;
+      font-weight: 700;
+    }
+    .file-grid {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: 1fr 1fr;
+    }
+    .file-button input { display: none; }
+    .file-note {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.45;
+      margin: 8px 0 0;
+    }
+    .workspace {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      padding: 18px 22px 24px;
+    }
+    .workspace-bar {
+      align-items: center;
+      display: flex;
+      gap: 10px;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .workspace-status {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .workspace-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .workspace-actions button { white-space: nowrap; }
+    .stage-wrap {
+      align-items: center;
+      background:
+        linear-gradient(45deg, #111014 25%, transparent 25%),
+        linear-gradient(-45deg, #111014 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #111014 75%),
+        linear-gradient(-45deg, transparent 75%, #111014 75%),
+        #0e0d10;
+      background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+      background-size: 20px 20px;
+      border: 1px solid var(--line);
+      display: flex;
+      flex: 1;
+      justify-content: center;
+      min-height: 430px;
+      overflow: hidden;
+      padding: 28px;
+      position: relative;
+    }
+    canvas {
+      background: #08070a;
+      box-shadow: 0 18px 54px rgba(0, 0, 0, .58);
+      cursor: grab;
+      display: block;
+      max-height: calc(100vh - 126px);
+      max-width: 100%;
+      object-fit: contain;
+      touch-action: none;
+    }
+    canvas.is-dragging { cursor: grabbing; }
+    .stage-hint {
+      background: rgba(8, 7, 10, .76);
+      border: 1px solid rgba(255, 255, 255, .12);
+      border-radius: 999px;
+      bottom: 12px;
+      color: rgba(255, 255, 255, .72);
+      font-size: 11px;
+      left: 50%;
+      padding: 6px 10px;
+      pointer-events: none;
+      position: absolute;
+      transform: translateX(-50%);
+      white-space: nowrap;
+    }
+    .toast {
+      background: #f6eef8;
+      border-radius: 8px;
+      bottom: 18px;
+      color: #241728;
+      font-size: 12px;
+      opacity: 0;
+      padding: 9px 12px;
+      pointer-events: none;
+      position: fixed;
+      right: 18px;
+      transform: translateY(8px);
+      transition: opacity .2s ease, transform .2s ease;
+      z-index: 20;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    @media (max-width: 900px) {
+      .app-shell { grid-template-columns: 290px minmax(0, 1fr); }
+      .stage-wrap { padding: 16px; }
+    }
+    @media (max-width: 720px) {
+      .app-shell { display: block; }
+      .sidebar { border-bottom: 1px solid var(--line); border-right: 0; }
+      .controls { max-height: none; overflow: visible; }
+      .workspace { min-height: 72vh; }
+      .workspace-bar { align-items: flex-start; flex-direction: column; }
+      .stage-wrap { min-height: 360px; }
+      canvas { max-height: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app-shell">
+    <aside class="sidebar" aria-label="封面設定">
+      <header class="brand">
+        <div class="eyebrow">Editorial Story / Template 01</div>
+        <h1>Patreon Cover Studio</h1>
+        <p>以主圖、模糊預告、巨型字與斜切線製作漫畫宣傳封面。</p>
+      </header>
+
+      <div class="controls">
+        <section class="control-section">
+          <h2 class="section-title">圖片</h2>
+          <div class="file-grid">
+            <label class="file-button">上載主圖<input id="main-image-input" type="file" accept="image/*"></label>
+            <label class="file-button">上載預告圖<input id="teaser-image-input" type="file" accept="image/*"></label>
+          </div>
+          <p class="file-note">未上載預告圖時會自動重用主圖。可直接拖曳右邊封面調整構圖焦點。</p>
+        </section>
+
+        <section class="control-section">
+          <h2 class="section-title">輸出比例</h2>
+          <div class="ratio-group" role="group" aria-label="選擇輸出比例">
+            <button class="ratio-button" type="button" data-ratio="16:9" aria-pressed="true">16:9</button>
+            <button class="ratio-button" type="button" data-ratio="1:1" aria-pressed="false">1:1</button>
+            <button class="ratio-button" type="button" data-ratio="4:5" aria-pressed="false">4:5</button>
+          </div>
+        </section>
+
+        <section class="control-section">
+          <h2 class="section-title">文字內容</h2>
+          <label class="field">
+            <span class="field-head">角色／系列名稱</span>
+            <input type="text" value="VIVIAN" maxlength="22" data-key="seriesName">
+          </label>
+          <label class="field">
+            <span class="field-head">主標題</span>
+            <input type="text" value="契約" maxlength="18" data-key="mainTitle">
+          </label>
+          <label class="field">
+            <span class="field-head">版本標籤</span>
+            <input type="text" value="PATREON EDITION · 01" maxlength="32" data-key="edition">
+          </label>
+          <label class="field">
+            <span class="field-head">宣傳句</span>
+            <input type="text" value="完全版漫畫" maxlength="24" data-key="salesLine">
+          </label>
+          <label class="field">
+            <span class="field-head">附加內容</span>
+            <input type="text" value="頁 · 4K BONUS ART 3枚" maxlength="36" data-key="bonusLine">
+          </label>
+          <label class="field">
+            <span class="field-head">突出數字</span>
+            <input type="text" value="24" maxlength="4" data-key="pageCount">
+          </label>
+        </section>
+
+        <section class="control-section">
+          <h2 class="section-title">視覺風格</h2>
+          <label class="field">
+            <span class="field-head">重點顏色</span>
+            <input id="accent-color" type="color" value="#c345df" data-key="accent">
+          </label>
+          <label class="field">
+            <span class="field-head">主圖縮放 <output data-output="zoom">106%</output></span>
+            <input type="range" min="100" max="180" value="106" data-key="zoom">
+          </label>
+          <label class="field">
+            <span class="field-head">水平焦點 <output data-output="positionX">50%</output></span>
+            <input type="range" min="0" max="100" value="50" data-key="positionX">
+          </label>
+          <label class="field">
+            <span class="field-head">垂直焦點 <output data-output="positionY">35%</output></span>
+            <input type="range" min="0" max="100" value="35" data-key="positionY">
+          </label>
+          <label class="field">
+            <span class="field-head">預告圖模糊 <output data-output="teaserBlur">16px</output></span>
+            <input type="range" min="0" max="36" value="16" data-key="teaserBlur">
+          </label>
+          <label class="field">
+            <span class="field-head">黑色遮罩 <output data-output="darkness">42%</output></span>
+            <input type="range" min="0" max="80" value="42" data-key="darkness">
+          </label>
+          <label class="field">
+            <span class="field-head">斜切角度 <output data-output="slashAngle">-11°</output></span>
+            <input type="range" min="-20" max="-2" value="-11" data-key="slashAngle">
+          </label>
+        </section>
+      </div>
+    </aside>
+
+    <section class="workspace" aria-label="封面預覽">
+      <div class="workspace-bar">
+        <div>
+          <div class="eyebrow">Live Preview</div>
+          <div class="workspace-status" id="canvas-status">1600 × 900 px · Patreon Post Feed</div>
+        </div>
+        <div class="workspace-actions">
+          <button class="ghost-button" id="reset-button" type="button">重設模板</button>
+          <button class="primary-button" id="download-button" type="button">下載 PNG</button>
+        </div>
+      </div>
+      <div class="stage-wrap">
+        <canvas id="cover-canvas" width="1600" height="900" aria-label="Patreon 漫畫封面預覽"></canvas>
+        <div class="stage-hint">拖曳圖片調整角色位置</div>
+      </div>
+    </section>
+  </main>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    (() => {
+      const canvas = document.getElementById('cover-canvas');
+      const ctx = canvas.getContext('2d');
+      const status = document.getElementById('canvas-status');
+      const toast = document.getElementById('toast');
+      const defaultState = {
+        ratio: '16:9',
+        seriesName: 'VIVIAN',
+        mainTitle: '契約',
+        edition: 'PATREON EDITION · 01',
+        salesLine: '完全版漫畫',
+        bonusLine: '頁 · 4K BONUS ART 3枚',
+        pageCount: '24',
+        accent: '#c345df',
+        zoom: 106,
+        positionX: 50,
+        positionY: 35,
+        teaserBlur: 16,
+        darkness: 42,
+        slashAngle: -11
+      };
+      const state = { ...defaultState };
+      const ratioMap = {
+        '16:9': { width: 1600, height: 900, label: 'Patreon Post Feed' },
+        '1:1': { width: 1200, height: 1200, label: 'Shop / Collection Cover' },
+        '4:5': { width: 1200, height: 1500, label: 'Portrait Promo' }
+      };
+      const mainImage = new Image();
+      const teaserImage = new Image();
+      let teaserIsCustom = false;
+      let toastTimer;
+      let dragState = null;
+
+      function showToast(message) {
+        toast.textContent = message;
+        toast.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toast.classList.remove('show'), 1800);
+      }
+
+      function hexToRgba(hex, alpha) {
+        const value = hex.replace('#', '');
+        const normalized = value.length === 3 ? value.split('').map((c) => c + c).join('') : value;
+        const number = parseInt(normalized, 16);
+        const r = (number >> 16) & 255;
+        const g = (number >> 8) & 255;
+        const b = number & 255;
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+      }
+
+      function polygonPath(points, width, height) {
+        ctx.beginPath();
+        points.forEach(([x, y], index) => {
+          const px = x * width;
+          const py = y * height;
+          if (index === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        });
+        ctx.closePath();
+      }
+
+      function drawImageCover(image, boxX, boxY, boxW, boxH, zoom, positionX, positionY) {
+        if (!image.complete || !image.naturalWidth) return;
+        const scale = Math.max(boxW / image.naturalWidth, boxH / image.naturalHeight) * zoom;
+        const drawW = image.naturalWidth * scale;
+        const drawH = image.naturalHeight * scale;
+        const drawX = boxX + (boxW - drawW) * (positionX / 100);
+        const drawY = boxY + (boxH - drawH) * (positionY / 100);
+        ctx.drawImage(image, drawX, drawY, drawW, drawH);
+      }
+
+      function drawPanel(image, points, filter, opacity, zoomOffset = 0, xOffset = 0) {
+        const w = canvas.width;
+        const h = canvas.height;
+        ctx.save();
+        polygonPath(points, w, h);
+        ctx.clip();
+        ctx.globalAlpha = opacity;
+        ctx.filter = filter;
+        drawImageCover(
+          image,
+          -w * .02 + xOffset,
+          -h * .02,
+          w * 1.04,
+          h * 1.04,
+          state.zoom / 100 + zoomOffset,
+          state.positionX,
+          state.positionY
+        );
+        ctx.restore();
+      }
+
+      function setFont(size, family = 'Georgia, Times New Roman, serif', weight = '400') {
+        ctx.font = `${weight} ${Math.max(8, size)}px ${family}`;
+      }
+
+      function fitFont(text, maxWidth, startSize, family, weight = '400') {
+        let size = startSize;
+        setFont(size, family, weight);
+        while (size > 9 && ctx.measureText(text).width > maxWidth) {
+          size -= 1;
+          setFont(size, family, weight);
+        }
+        return size;
+      }
+
+      function drawBigWord(word, x, y, size) {
+        setFont(size);
+        ctx.textBaseline = 'top';
+        let cursor = x;
+        [...word].forEach((character, index) => {
+          ctx.fillStyle = index === 1 ? state.accent : '#ffffff';
+          ctx.fillText(character, cursor, y);
+          cursor += ctx.measureText(character).width * .93;
+        });
+      }
+
+      function drawRotatedBar(centerY, thickness, angleDeg) {
+        const w = canvas.width;
+        const h = canvas.height;
+        ctx.save();
+        ctx.translate(w / 2, centerY);
+        ctx.rotate(angleDeg * Math.PI / 180);
+        ctx.fillStyle = '#08070a';
+        ctx.fillRect(-w * .68, -thickness / 2, w * 1.36, thickness);
+        ctx.strokeStyle = 'rgba(229, 216, 234, .22)';
+        ctx.lineWidth = Math.max(1, h * .0014);
+        ctx.strokeRect(-w * .68, -thickness / 2, w * 1.36, thickness);
+        ctx.restore();
+      }
+
+      function drawText() {
+        const w = canvas.width;
+        const h = canvas.height;
+        const sans = 'Inter, Noto Sans TC, Microsoft JhengHei, sans-serif';
+        const serif = 'Georgia, Times New Roman, Noto Serif TC, serif';
+        const portrait = h > w;
+
+        drawBigWord(state.seriesName.toUpperCase(), -w * .035, -h * .11, Math.min(h * .34, w * .215));
+
+        ctx.fillStyle = '#d9d0dc';
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'top';
+        setFont(Math.max(10, Math.min(w, h) * .015), sans, '700');
+        ctx.fillText(state.edition, w * .965, h * .035);
+
+        ctx.save();
+        ctx.translate(w * .05, h * .39);
+        ctx.rotate(-4 * Math.PI / 180);
+        ctx.fillStyle = state.accent;
+        ctx.fillRect(0, 0, portrait ? w * .25 : w * .13, h * .067);
+        ctx.fillStyle = '#150e18';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        setFont(Math.max(10, Math.min(w, h) * .015), sans, '700');
+        ctx.fillText('CASE 01', (portrait ? w * .25 : w * .13) / 2, h * .0335);
+        ctx.restore();
+
+        ctx.fillStyle = 'rgba(255,255,255,.73)';
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'bottom';
+        setFont(Math.max(9, Math.min(w, h) * .013), sans, '700');
+        ctx.fillText('MEMBERS ONLY', w * .955, h * .705);
+        ctx.fillText('UNLOCK THE FULL STORY →', w * .955, h * .73);
+
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+        const separator = '//';
+        const name = state.seriesName.toUpperCase();
+        const title = state.mainTitle;
+        const fullTitle = `${name} ${separator} ${title}`;
+        const titleSize = fitFont(fullTitle, w * .89, Math.min(h * .112, w * .094), serif);
+        setFont(titleSize, serif);
+        const titleY = h * (portrait ? .795 : .82);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(name, w * .055, titleY);
+        let cursor = w * .055 + ctx.measureText(name + ' ').width;
+        ctx.fillText('/', cursor, titleY);
+        cursor += ctx.measureText('/').width;
+        ctx.fillStyle = state.accent;
+        ctx.fillText('/', cursor, titleY);
+        cursor += ctx.measureText('/ ').width;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(title, cursor, titleY);
+
+        const subSize = Math.max(12, Math.min(w, h) * (portrait ? .023 : .028));
+        setFont(subSize, sans, '400');
+        ctx.textBaseline = 'middle';
+        const pieces = [state.salesLine, state.pageCount, state.bonusLine];
+        const gap = subSize * .55;
+        const totalWidth = ctx.measureText(pieces[0]).width + ctx.measureText(pieces[1]).width * 1.45 + ctx.measureText(pieces[2]).width + gap * 2;
+        let subX = Math.max(w * .055, w - w * .055 - totalWidth);
+        const subY = h * (portrait ? .9 : .925);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(pieces[0], subX, subY);
+        subX += ctx.measureText(pieces[0]).width + gap;
+        setFont(subSize * 1.48, serif, '400');
+        ctx.fillStyle = state.accent;
+        ctx.fillText(pieces[1], subX, subY);
+        subX += ctx.measureText(pieces[1]).width + gap;
+        setFont(subSize, sans, '400');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(pieces[2], subX, subY);
+      }
+
+      function draw() {
+        const w = canvas.width;
+        const h = canvas.height;
+        const portrait = h > w;
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = '#08070a';
+        ctx.fillRect(0, 0, w, h);
+
+        const glow = ctx.createRadialGradient(w * .58, h * .4, 0, w * .58, h * .4, w * .35);
+        glow.addColorStop(0, hexToRgba(state.accent, .14));
+        glow.addColorStop(1, 'rgba(8,7,10,0)');
+        ctx.fillStyle = glow;
+        ctx.fillRect(0, 0, w, h);
+
+        const leftPoints = portrait
+          ? [[.02,.18],[.34,.14],[.3,.72],[.02,.76]]
+          : [[.02,.2],[.26,.15],[.22,.74],[.02,.79]];
+        const heroPoints = portrait
+          ? [[.09,.16],[.9,.12],[.82,.74],[.02,.79]]
+          : [[.18,.16],[.68,.12],[.62,.75],[.15,.79]];
+        const teaserPoints = portrait
+          ? [[.48,.2],[.98,.15],[.93,.72],[.42,.77]]
+          : [[.62,.19],[.98,.15],[.94,.7],[.56,.76]];
+
+        drawPanel(mainImage, leftPoints, 'saturate(.55) contrast(1.16)', .34, .18, -w * .14);
+        drawPanel(teaserIsCustom ? teaserImage : mainImage, teaserPoints, `blur(${state.teaserBlur}px) saturate(.72) brightness(.72)`, .76, .2, w * .12);
+        drawPanel(mainImage, heroPoints, 'contrast(1.05) saturate(.95)', 1, 0, 0);
+
+        const veil = ctx.createLinearGradient(0, h * .38, 0, h * .82);
+        veil.addColorStop(0, 'rgba(8,7,10,0)');
+        veil.addColorStop(1, `rgba(8,7,10,${Math.min(.92, state.darkness / 100 + .32)})`);
+        ctx.fillStyle = veil;
+        ctx.fillRect(0, h * .35, w, h * .52);
+
+        ctx.fillStyle = `rgba(8,7,10,${state.darkness / 100 * .56})`;
+        ctx.fillRect(0, 0, w, h);
+
+        drawRotatedBar(h * .285, h * .035, state.slashAngle);
+        drawRotatedBar(h * .59, h * .033, state.slashAngle - 1);
+        drawRotatedBar(h * .68, h * .014, state.slashAngle - 1);
+        drawText();
+      }
+
+      function resizeCanvas() {
+        const config = ratioMap[state.ratio];
+        canvas.width = config.width;
+        canvas.height = config.height;
+        status.textContent = `${config.width} × ${config.height} px · ${config.label}`;
+        draw();
+      }
+
+      function loadFile(file, image, callback) {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          image.onload = () => {
+            callback();
+            draw();
+          };
+          image.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+      }
+
+      function updateOutputs() {
+        document.querySelectorAll('[data-output]').forEach((output) => {
+          const key = output.dataset.output;
+          const suffix = key === 'teaserBlur' ? 'px' : key === 'slashAngle' ? '°' : '%';
+          output.textContent = `${state[key]}${suffix}`;
+        });
+      }
+
+      function syncControls() {
+        document.querySelectorAll('[data-key]').forEach((input) => {
+          input.value = state[input.dataset.key];
+        });
+        document.querySelectorAll('[data-ratio]').forEach((button) => {
+          button.setAttribute('aria-pressed', String(button.dataset.ratio === state.ratio));
+        });
+        document.documentElement.style.setProperty('--accent', state.accent);
+        updateOutputs();
+      }
+
+      document.querySelectorAll('[data-key]').forEach((input) => {
+        input.addEventListener('input', () => {
+          const key = input.dataset.key;
+          state[key] = input.type === 'range' ? Number(input.value) : input.value;
+          if (key === 'accent') document.documentElement.style.setProperty('--accent', state.accent);
+          updateOutputs();
+          draw();
+        });
+      });
+
+      document.querySelectorAll('[data-ratio]').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.ratio = button.dataset.ratio;
+          document.querySelectorAll('[data-ratio]').forEach((item) => item.setAttribute('aria-pressed', String(item === button)));
+          resizeCanvas();
+        });
+      });
+
+      document.getElementById('main-image-input').addEventListener('change', (event) => {
+        loadFile(event.target.files[0], mainImage, () => showToast('主圖已更新'));
+      });
+      document.getElementById('teaser-image-input').addEventListener('change', (event) => {
+        loadFile(event.target.files[0], teaserImage, () => {
+          teaserIsCustom = true;
+          showToast('預告圖已更新');
+        });
+      });
+
+      canvas.addEventListener('pointerdown', (event) => {
+        dragState = {
+          pointerId: event.pointerId,
+          startX: event.clientX,
+          startY: event.clientY,
+          positionX: state.positionX,
+          positionY: state.positionY
+        };
+        canvas.setPointerCapture(event.pointerId);
+        canvas.classList.add('is-dragging');
+      });
+      canvas.addEventListener('pointermove', (event) => {
+        if (!dragState || dragState.pointerId !== event.pointerId) return;
+        const rect = canvas.getBoundingClientRect();
+        const deltaX = (event.clientX - dragState.startX) / rect.width * 100;
+        const deltaY = (event.clientY - dragState.startY) / rect.height * 100;
+        state.positionX = Math.round(Math.max(0, Math.min(100, dragState.positionX - deltaX)));
+        state.positionY = Math.round(Math.max(0, Math.min(100, dragState.positionY - deltaY)));
+        document.querySelector('[data-key="positionX"]').value = state.positionX;
+        document.querySelector('[data-key="positionY"]').value = state.positionY;
+        updateOutputs();
+        draw();
+      });
+      function endDrag(event) {
+        if (!dragState || dragState.pointerId !== event.pointerId) return;
+        canvas.releasePointerCapture(event.pointerId);
+        dragState = null;
+        canvas.classList.remove('is-dragging');
+      }
+      canvas.addEventListener('pointerup', endDrag);
+      canvas.addEventListener('pointercancel', endDrag);
+
+      document.getElementById('reset-button').addEventListener('click', () => {
+        Object.assign(state, defaultState);
+        teaserIsCustom = false;
+        syncControls();
+        resizeCanvas();
+        showToast('模板已重設');
+      });
+
+      document.getElementById('download-button').addEventListener('click', () => {
+        draw();
+        canvas.toBlob((blob) => {
+          if (!blob) return;
+          const safeName = (state.seriesName || 'patreon-cover').replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-|-$/g, '') || 'patreon-cover';
+          const link = document.createElement('a');
+          link.download = `${safeName}-${state.ratio.replace(':', 'x')}.png`;
+          link.href = URL.createObjectURL(blob);
+          link.click();
+          setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+          showToast('PNG 已下載');
+        }, 'image/png');
+      });
+
+      mainImage.onload = () => draw();
+      mainImage.src = 'patreon-cover-assets/vivian-sample.jpg';
+      syncControls();
+      resizeCanvas();
+    })();
+  </script>
+</body>
+</html>
