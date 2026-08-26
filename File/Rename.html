@@ -1,0 +1,1334 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Sorter Pro V26</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        slate: {
+                            850: '#1e293b',
+                            900: '#0f172a',
+                            950: '#020617',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+    <style>
+        :root {
+            --slot-size: 140px;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: #0f172a; /* Slate 900 */
+            color: #e2e8f0;
+        }
+
+        /* 滾動條美化 */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent; 
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #475569; 
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #64748b; 
+        }
+
+        /* --- 圖片卡片設計 --- */
+        .img-slot {
+            width: var(--slot-size);
+            height: var(--slot-size);
+            background-color: #1e293b; /* Slate 800 */
+            border: 2px solid #334155;
+            border-radius: 12px;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .img-slot:hover {
+            border-color: #64748b;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+        }
+
+        .img-slot.selected {
+            border-color: #6366f1; /* Indigo 500 */
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3), 0 10px 15px -3px rgba(0, 0, 0, 0.4);
+            transform: translateY(-2px);
+        }
+
+        .img-slot.selected::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 9px;
+            background: rgba(99, 102, 241, 0.14);
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        .selection-marquee {
+            position: fixed;
+            border: 1px solid #818cf8;
+            background: rgba(99, 102, 241, 0.2);
+            box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.35) inset;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        #leftPanel.marquee-active,
+        #leftPanel.marquee-active .img-slot {
+            cursor: crosshair;
+            user-select: none;
+        }
+
+        .sortable-ghost {
+            opacity: 0.3;
+            background: #6366f1;
+            border: 2px dashed #818cf8;
+        }
+        
+        .sortable-drag {
+            cursor: grabbing;
+            opacity: 1;
+            transform: scale(1.05) rotate(2deg);
+            z-index: 50;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+
+        /* 卡片內的圖片 */
+        .thumb-img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain; /* 改為 cover 也可以，但 contain 比較能看清全貌 */
+            background-image: linear-gradient(45deg, #1e293b 25%, transparent 25%), linear-gradient(-45deg, #1e293b 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #1e293b 75%), linear-gradient(-45deg, transparent 75%, #1e293b 75%);
+            background-size: 10px 10px;
+            background-position: 0 0, 0 5px, 5px -5px, -5px 0px;
+            pointer-events: none;
+        }
+
+        /* 序號標記 */
+        .index-badge {
+            position: absolute;
+            top: 6px;
+            left: 6px;
+            min-width: 24px;
+            height: 24px;
+            padding: 0 6px;
+            background-color: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(2px);
+            color: #fff;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 12px;
+            z-index: 10;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .img-slot.selected .index-badge {
+            background-color: #4f46e5;
+        }
+
+        /* 移除按鈕 */
+        .remove-btn {
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            width: 24px;
+            height: 24px;
+            background-color: rgba(239, 68, 68, 0.9);
+            color: white;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            opacity: 0;
+            transform: scale(0.8);
+            transition: all 0.2s;
+            z-index: 10;
+        }
+        .img-slot:hover .remove-btn {
+            opacity: 1;
+            transform: scale(1);
+        }
+        .remove-btn:hover {
+            background-color: #dc2626;
+        }
+
+        /* 分隔條 */
+        #resizer-bar {
+            width: 4px;
+            background: #1e293b;
+            cursor: col-resize;
+            transition: 0.2s;
+            position: relative;
+            z-index: 40;
+        }
+        #resizer-bar:hover, #resizer-bar.active {
+            background: #6366f1;
+        }
+        /* 增加感應區 */
+        #resizer-bar::after {
+            content: '';
+            position: absolute;
+            left: -4px;
+            right: -4px;
+            top: 0;
+            bottom: 0;
+        }
+
+        /* Range Slider 美化 */
+        input[type=range] {
+            -webkit-appearance: none;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: #6366f1;
+            cursor: pointer;
+            margin-top: -6px;
+            box-shadow: 0 0 0 2px #1e293b;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #475569;
+            border-radius: 2px;
+        }
+
+        /* 開關 Toggle 樣式 */
+        .toggle-checkbox:checked {
+            right: 0;
+            border-color: #6366f1;
+        }
+        .toggle-checkbox:checked + .toggle-label {
+            background-color: #6366f1;
+        }
+    </style>
+</head>
+<body class="flex flex-col h-screen overflow-hidden text-sm selection:bg-indigo-500 selection:text-white">
+
+    <!-- 頂部導航欄 (簡潔化) -->
+    <div class="bg-slate-900 border-b border-slate-800 h-14 flex items-center justify-between px-4 shrink-0 z-30 shadow-sm">
+        <div class="flex items-center gap-3">
+            <div class="bg-indigo-600 p-1.5 rounded-lg shadow-lg shadow-indigo-500/20">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+            </div>
+            <h1 class="font-bold text-lg tracking-tight text-slate-100">Image Sorter <span class="text-indigo-500">Pro</span></h1>
+            
+            <div id="sourceDirBadge" class="hidden ml-2 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-medium flex items-center gap-1">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
+                <span id="sourceDirName">來源資料夾</span>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-4">
+            <!-- 網格大小 -->
+            <div class="hidden md:flex items-center gap-2 group">
+                <svg class="w-4 h-4 text-slate-500 group-hover:text-slate-300 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+                <input type="range" id="gridSizeSlider" min="80" max="250" value="140" class="w-24">
+            </div>
+
+            <div class="h-6 w-px bg-slate-700"></div>
+
+            <button onclick="togglePreviewPane()" id="togglePreviewBtn" class="text-slate-400 hover:text-white transition p-1.5 rounded hover:bg-slate-800" title="切換預覽窗格">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path></svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- 主要工作區 -->
+    <div class="flex-1 flex overflow-hidden relative">
+        
+        <!-- 左側：圖片網格 -->
+        <div class="flex-1 bg-slate-950 overflow-y-auto custom-scrollbar relative" id="leftPanel">
+            <!-- 隱藏的檔案輸入 -->
+            <input type="file" id="fileInput" multiple accept="image/jpeg,image/png,image/webp" class="hidden">
+
+            <div id="selectionHint" class="absolute top-2 right-4 z-20 pointer-events-none select-none px-2.5 py-1 rounded-full bg-slate-900/80 border border-slate-700/80 text-[11px] text-slate-400 shadow-lg backdrop-blur-sm">
+                空白處拖曳框選 · Ctrl / ⌘ 切換 · Shift 連選
+            </div>
+
+            <div id="gridContainer" class="flex flex-wrap gap-4 p-6 content-start min-h-full">
+                <!-- 圖片 Slot 動態生成於此 -->
+            </div>
+
+            <!-- 空狀態提示 (置中) -->
+            <div id="emptyMsg" class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
+                <div class="border-2 border-dashed border-slate-700 rounded-2xl p-12 flex flex-col items-center text-slate-500 bg-slate-900/50 backdrop-blur-sm">
+                    <svg class="w-16 h-16 mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    <h3 class="text-xl font-bold text-slate-300 mb-2">拖曳圖片至此</h3>
+                    <p class="text-sm opacity-70 mb-6">支援 JPG, PNG, WEBP</p>
+                    <div class="flex gap-3 pointer-events-auto">
+                        <button onclick="document.getElementById('fileInput').click()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium transition flex items-center shadow-lg border border-slate-600">
+                            選擇檔案
+                        </button>
+                        <button onclick="importFromFolder()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition flex items-center shadow-lg shadow-indigo-500/20">
+                            導入資料夾
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 可拖曳分隔線 -->
+        <div id="resizer-bar" class="hidden md:block"></div>
+
+        <!-- 右側：屬性預覽面板 -->
+        <div id="previewPane" style="width: 340px;" class="bg-slate-900 border-l border-slate-800 flex flex-col shadow-2xl z-20 hidden md:flex flex-shrink-0">
+            <div class="p-4 border-b border-slate-800 font-semibold text-slate-300 flex items-center justify-between">
+                <span>Inspector</span>
+                <span id="selectionSummary" class="text-xs text-slate-500 px-2 py-1 bg-slate-800 rounded">未選取</span>
+            </div>
+
+            <div id="previewContent" class="flex-1 overflow-y-auto custom-scrollbar p-5 flex flex-col">
+                <!-- 未選取狀態 -->
+                <div id="noSelectionMsg" class="flex-1 flex flex-col items-center justify-center text-slate-600 select-none">
+                    <svg class="w-12 h-12 mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <p class="text-sm">點擊圖片檢視詳情</p>
+                    <p class="text-xs mt-2 text-center leading-relaxed">可在空白處按住滑鼠拖曳框選多張圖片</p>
+                </div>
+
+                <!-- 已選取狀態 -->
+                <div id="selectionInfo" class="hidden flex-col gap-5 w-full">
+                    
+                    <!-- 預覽圖區塊 -->
+                    <div class="bg-slate-950/50 rounded-xl border border-slate-800 p-2 relative group">
+                        <div class="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                             <input type="range" id="zoomSlider" min="100" max="600" value="250" class="w-20 accent-indigo-500 h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer shadow-lg" title="縮放預覽">
+                        </div>
+                        <div class="flex justify-center items-center overflow-hidden min-h-[200px]" style="background-image: radial-gradient(#334155 1px, transparent 1px); background-size: 20px 20px;">
+                            <img id="previewImg" src="" class="max-w-full object-contain rounded shadow-md transition-all duration-200" style="max-height: 250px;">
+                        </div>
+                    </div>
+
+                    <!-- 資訊表格 -->
+                    <div class="space-y-4">
+                        <div class="group">
+                            <label class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">原始檔名</label>
+                            <div class="text-sm text-slate-200 font-mono break-all leading-tight select-text" id="previewName">image_001.jpg</div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">檔案大小</label>
+                                <div class="text-sm text-slate-300" id="previewSize">2.4 MB</div>
+                            </div>
+                            <div>
+                                <label class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">格式</label>
+                                <div class="text-sm text-slate-300" id="previewType">image/jpeg</div>
+                            </div>
+                        </div>
+
+                        <div class="pt-4 border-t border-slate-800">
+                            <label class="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                                輸出預覽
+                            </label>
+                            <div class="p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-lg">
+                                <p id="previewNewName" class="font-mono text-sm text-indigo-300 break-all select-text">IMG_01.jpg</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 預覽窗格底部動作 -->
+            <div id="inspectorActions" class="p-4 border-t border-slate-800 bg-slate-900 hidden">
+                 <button id="removeSelectedBtn" onclick="removeSelectedImage()" class="w-full py-2 px-3 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg text-sm transition flex items-center justify-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                    <span id="removeSelectedLabel">移除此圖片</span>
+                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 底部控制列 (Dashboard Style) -->
+    <div class="bg-slate-900 border-t border-slate-800 p-0 z-30 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.3)]">
+        <div class="flex flex-col xl:flex-row items-stretch xl:items-center">
+            
+            <!-- 區域 1: 命名規則設定 -->
+            <div class="flex-1 p-3 flex flex-wrap items-center gap-3 xl:gap-6 border-b xl:border-b-0 border-slate-800 bg-slate-800/50">
+                <div class="flex items-center gap-2 text-slate-400 text-xs font-semibold uppercase tracking-wider mr-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                    命名規則
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <div class="relative group">
+                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs font-mono">前</span>
+                        <input type="text" id="prefixInput" value="IMG_" class="bg-slate-950 border border-slate-700 text-white pl-8 pr-3 py-1.5 rounded-md w-28 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm transition font-mono placeholder-slate-700" placeholder="IMG_">
+                    </div>
+                    
+                    <span class="text-slate-600 font-mono">+</span>
+                    
+                    <label class="flex items-center cursor-pointer select-none group" title="自動補零 (例如 01, 02)">
+                        <div class="relative">
+                            <input type="checkbox" id="padZeroCheckbox" class="sr-only peer" checked>
+                            <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                        </div>
+                        <span class="ml-2 text-sm text-slate-300 group-hover:text-white transition">序號補零</span>
+                    </label>
+
+                    <span class="text-slate-600 font-mono">+</span>
+
+                    <div class="relative group">
+                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs font-mono">後</span>
+                        <input type="text" id="suffixInput" class="bg-slate-950 border border-slate-700 text-white pl-8 pr-3 py-1.5 rounded-md w-24 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm transition font-mono placeholder-slate-700" placeholder="">
+                    </div>
+                </div>
+
+                <div class="h-6 w-px bg-slate-700 hidden xl:block"></div>
+
+                <label class="flex items-center cursor-pointer select-none group" title="移除 EXIF/Metadata 以保護隱私">
+                    <div class="relative">
+                        <input type="checkbox" id="cleanMetaCheckbox" class="sr-only peer">
+                        <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-600"></div>
+                    </div>
+                    <span class="ml-2 text-sm text-slate-300 group-hover:text-rose-400 transition flex items-center gap-1">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                        清洗隱私資訊
+                    </span>
+                </label>
+            </div>
+
+            <!-- 區域 2: 操作按鈕 -->
+            <div class="p-3 flex items-center justify-end gap-3 bg-slate-900">
+                <button onclick="clearAll()" class="px-4 py-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg text-sm font-medium transition">
+                    全部清空
+                </button>
+                
+                <button id="exportBtn" onclick="smartExport()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-6 rounded-lg shadow-lg shadow-indigo-500/30 transition transform active:scale-95 flex items-center gap-2 border border-indigo-500">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    開始匯出
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal (Modern) -->
+    <div id="modalOverlay" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center z-50 transition-opacity opacity-0">
+        <div class="bg-slate-900 rounded-xl p-0 max-w-md w-full border border-slate-700 shadow-2xl transform scale-95 transition-all" id="modalBox">
+            <div class="p-6">
+                <h3 class="text-xl font-bold text-white mb-2 flex items-center gap-2" id="modalTitle">
+                    標題
+                </h3>
+                <p class="text-slate-300 mb-6 leading-relaxed" id="modalMsg">訊息內容</p>
+                
+                <!-- Progress Bar -->
+                <div id="progressBarContainer" class="hidden w-full bg-slate-800 rounded-full h-2 mb-4 overflow-hidden">
+                    <div id="progressBar" class="bg-indigo-500 h-full rounded-full transition-all duration-300 ease-out" style="width: 0%"></div>
+                </div>
+
+                <div class="flex justify-end gap-3 pt-2">
+                    <button id="modalCancelBtn" onclick="closeModal()" class="hidden px-4 py-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition">取消</button>
+                    <button id="modalConfirmBtn" onclick="closeModal()" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium shadow-lg shadow-indigo-500/20 transition">確定</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // === 變數與初始化 ===
+        let images = []; 
+        let sortableInstance = null;
+        let sourceDirectoryHandle = null;
+        let selectedImageId = null; 
+        let selectedImageIds = new Set();
+        let selectionAnchorId = null;
+        let suppressNextCardClick = false;
+        let marqueeState = null;
+        let modalCloseTimer = null;
+
+        // DOM 元素
+        const gridContainer = document.getElementById('gridContainer');
+        const leftPanel = document.getElementById('leftPanel');
+        const emptyMsg = document.getElementById('emptyMsg');
+        const prefixInput = document.getElementById('prefixInput');
+        const suffixInput = document.getElementById('suffixInput');
+        const padZeroCheckbox = document.getElementById('padZeroCheckbox');
+        const cleanMetaCheckbox = document.getElementById('cleanMetaCheckbox'); 
+        const sourceDirBadge = document.getElementById('sourceDirBadge');
+        const sourceDirName = document.getElementById('sourceDirName');
+        
+        const previewPane = document.getElementById('previewPane');
+        const resizerBar = document.getElementById('resizer-bar');
+        const noSelectionMsg = document.getElementById('noSelectionMsg');
+        const selectionInfo = document.getElementById('selectionInfo');
+        const inspectorActions = document.getElementById('inspectorActions');
+        
+        const previewImg = document.getElementById('previewImg');
+        const previewName = document.getElementById('previewName');
+        const previewSize = document.getElementById('previewSize');
+        const previewType = document.getElementById('previewType');
+        const previewNewName = document.getElementById('previewNewName');
+        const selectionSummary = document.getElementById('selectionSummary');
+        const removeSelectedLabel = document.getElementById('removeSelectedLabel');
+        
+        const zoomSlider = document.getElementById('zoomSlider');
+        const gridSizeSlider = document.getElementById('gridSizeSlider');
+
+        // === 初始化 SortableJS ===
+        function initSortable() {
+            sortableInstance = new Sortable(gridContainer, {
+                animation: 250,
+                ghostClass: 'sortable-ghost',
+                dragClass: 'sortable-drag',
+                delay: 0,
+                forceFallback: true, // 使用 Fallback 以便自定義 dragClass 樣式
+                fallbackClass: 'sortable-drag',
+                filter: '.remove-btn',
+                preventOnFilter: false,
+                onStart: function(evt) {
+                    const draggedId = evt.item?.id;
+                    if (draggedId && !selectedImageIds.has(draggedId)) {
+                        setSelection([draggedId], draggedId);
+                        selectionAnchorId = draggedId;
+                    }
+                    suppressNextCardClick = true;
+                    document.body.style.cursor = 'grabbing';
+                },
+                onEnd: function (evt) {
+                    document.body.style.cursor = 'default';
+                    setTimeout(() => { suppressNextCardClick = false; }, 0);
+                    const oldIndex = evt.oldIndex; 
+                    const newIndex = evt.newIndex;
+                    if (oldIndex !== newIndex) {
+                        const movedItem = images.splice(oldIndex, 1)[0];
+                        images.splice(newIndex, 0, movedItem);
+                        updateIndexes();
+                        if(selectedImageId) updatePreviewPane(selectedImageId);
+                    }
+                },
+                onMove: function() {
+                    return !marqueeState;
+                }
+            });
+        }
+
+        // === 網格大小調整 ===
+        gridSizeSlider.addEventListener('input', function(e) {
+            const size = e.target.value;
+            document.documentElement.style.setProperty('--slot-size', `${size}px`);
+        });
+
+        // === 視窗分隔拖曳 ===
+        let isResizing = false;
+        resizerBar.addEventListener('mousedown', function(e) {
+            isResizing = true;
+            document.body.style.cursor = 'col-resize';
+            resizerBar.classList.add('active');
+            e.preventDefault(); 
+        });
+
+        document.addEventListener('mousemove', function(e) {
+            if (!isResizing) return;
+            const newWidth = window.innerWidth - e.clientX;
+            if (newWidth > 250 && newWidth < 800) {
+                previewPane.style.width = `${newWidth}px`;
+            }
+        });
+
+        document.addEventListener('mouseup', function(e) {
+            if (isResizing) {
+                isResizing = false;
+                document.body.style.cursor = ''; 
+                resizerBar.classList.remove('active');
+            }
+        });
+
+        // === 預覽圖縮放 ===
+        zoomSlider.addEventListener('input', function(e) {
+            previewImg.style.maxHeight = `${e.target.value}px`;
+        });
+
+        // === 切換預覽窗格 ===
+        function togglePreviewPane() {
+            const btn = document.getElementById('togglePreviewBtn');
+            previewPane.classList.toggle('!hidden');
+            resizerBar.classList.toggle('!hidden');
+            
+            const isHidden = previewPane.classList.contains('!hidden');
+            if (isHidden) {
+                btn.classList.add('text-indigo-400', 'bg-slate-800');
+                btn.classList.remove('text-slate-400');
+            } else {
+                btn.classList.remove('text-indigo-400', 'bg-slate-800');
+                btn.classList.add('text-slate-400');
+            }
+        }
+
+        // === 檔案處理邏輯 ===
+        
+        // 1. 選檔與拖曳
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            resetSourceHandle(); 
+            handleFiles(e.target.files);
+            this.value = '';
+        });
+
+        const dropZone = document.getElementById('leftPanel'); 
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+            document.body.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        // 拖曳視覺回饋
+        let dragCounter = 0;
+        dropZone.addEventListener('dragenter', () => {
+            dragCounter++;
+            dropZone.classList.add('bg-slate-900/50', 'ring-2', 'ring-indigo-500', 'ring-inset');
+        });
+        dropZone.addEventListener('dragleave', () => {
+            dragCounter--;
+            if(dragCounter === 0) {
+                dropZone.classList.remove('bg-slate-900/50', 'ring-2', 'ring-indigo-500', 'ring-inset');
+            }
+        });
+        dropZone.addEventListener('drop', (e) => {
+            dragCounter = 0;
+            dropZone.classList.remove('bg-slate-900/50', 'ring-2', 'ring-indigo-500', 'ring-inset');
+            resetSourceHandle();
+            handleFiles(e.dataTransfer.files);
+        });
+        const SUPPORTED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
+        function isSupportedImageFile(file) {
+            return Boolean(file) && (
+                SUPPORTED_IMAGE_TYPES.has(file.type) ||
+                /\.(?:jpe?g|png|webp)$/i.test(file.name || '')
+            );
+        }
+
+        function resetSourceHandle() {
+            sourceDirectoryHandle = null;
+            sourceDirBadge.classList.add('hidden');
+            sourceDirBadge.classList.remove('flex');
+        }
+
+        // 2. 資料夾導入
+        async function importFromFolder() {
+            try {
+                if (!('showDirectoryPicker' in window)) throw new Error("API_NOT_SUPPORTED");
+
+                const dirHandle = await window.showDirectoryPicker({ mode: 'read', startIn: 'pictures' });
+
+                showModal("讀取中", "正在掃描資料夾...", true);
+                
+                sourceDirectoryHandle = dirHandle;
+                sourceDirBadge.classList.remove('hidden');
+                sourceDirBadge.classList.add('flex');
+                sourceDirName.innerText = dirHandle.name;
+
+                const filePromises = [];
+                for await (const entry of dirHandle.values()) {
+                    if (entry.kind === 'file') {
+                        const file = await entry.getFile();
+                        if (isSupportedImageFile(file)) {
+                            filePromises.push(file);
+                        }
+                    }
+                }
+                // 自然排序
+                filePromises.sort((a, b) => a.name.localeCompare(b.name, undefined, {numeric: true, sensitivity: 'base'}));
+                await handleFiles(filePromises);
+                closeModal();
+            } catch (err) {
+                if (err.name === 'SecurityError' || err.message.includes('Cross origin') || err.message === 'API_NOT_SUPPORTED') {
+                    showModal("提示", "瀏覽器限制：請改用「選擇檔案」或直接拖曳圖片。");
+                } else if (err.name !== 'AbortError') {
+                    console.error(err);
+                    showModal("錯誤", "讀取失敗: " + err.message);
+                }
+            }
+        }
+
+        // 核心：處理檔案並建立卡片
+        async function handleFiles(fileList) {
+            if (!fileList.length) return;
+            const validFiles = Array.from(fileList || []).filter(isSupportedImageFile);
+            
+            if (validFiles.length === 0 && !sourceDirectoryHandle) return;
+            if (validFiles.length > 0) emptyMsg.classList.add('hidden');
+
+            // 批量建立 DOM 以提升效能
+            const fragment = document.createDocumentFragment();
+
+            for (const file of validFiles) {
+                const id = 'img_' + (crypto.randomUUID?.() || Math.random().toString(36).slice(2));
+                const imgObj = {
+                    id: id,
+                    file: file,
+                    previewUrl: null,
+                    loaded: false
+                };
+                
+                images.push(imgObj);
+                const card = createCardDOM(imgObj, images.length - 1);
+                fragment.appendChild(card);
+                
+                imgObj.previewUrl = URL.createObjectURL(file);
+                // The card is still inside a detached DocumentFragment here.
+                // Pass the node directly instead of looking it up in document.
+                updateCardImage(card, imgObj.previewUrl);
+
+            }
+            gridContainer.appendChild(fragment);
+            updateIndexes();
+        }
+
+        function readFileAsync(file) {
+            return Promise.resolve(URL.createObjectURL(file));
+        }
+
+        // 清洗 Metadata (Canvas 重繪)
+        async function cleanImageMetadata(file) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                const url = URL.createObjectURL(file);
+                
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) {
+                        URL.revokeObjectURL(url);
+                        reject(new Error("Canvas context unavailable"));
+                        return;
+                    }
+                    ctx.drawImage(img, 0, 0);
+                    
+                    const type = SUPPORTED_IMAGE_TYPES.has(file.type) ? file.type
+                        : /\.png$/i.test(file.name) ? 'image/png'
+                        : /\.webp$/i.test(file.name) ? 'image/webp'
+                        : 'image/jpeg';
+                    // 如果是 jpg/webp 品質設高一點
+                    const quality = (type === 'image/jpeg' || type === 'image/webp') ? 0.95 : undefined;
+
+                    canvas.toBlob(blob => {
+                        URL.revokeObjectURL(url);
+                        if (blob) resolve(blob);
+                        else reject(new Error("Canvas error"));
+                    }, type, quality);
+                };
+                img.onerror = (e) => {
+                    URL.revokeObjectURL(url);
+                    reject(new Error("Load failed"));
+                };
+                img.src = url;
+            });
+        }
+
+        // DOM 建立
+        function createCardDOM(imgObj, index) {
+            const div = document.createElement('div');
+            div.className = 'img-slot group';
+            div.id = imgObj.id;
+            div.tabIndex = 0;
+            div.setAttribute('role', 'button');
+            div.setAttribute('aria-label', `圖片 ${index + 1}: ${imgObj.file.name}`);
+            div.setAttribute('aria-selected', 'false');
+            div.onclick = (event) => handleCardSelection(event, imgObj.id);
+            div.onkeydown = (event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                handleCardSelection(event, imgObj.id);
+            };
+
+            // 序號
+            const badge = document.createElement('div');
+            badge.className = 'index-badge';
+            badge.innerText = index + 1;
+            div.appendChild(badge);
+
+            // 移除按鈕
+            const removeBtn = document.createElement('div');
+            removeBtn.className = 'remove-btn';
+            removeBtn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>';
+            removeBtn.title = '移除';
+            removeBtn.onclick = (e) => {
+                e.stopPropagation();
+                removeImage(imgObj.id);
+            };
+            div.appendChild(removeBtn);
+
+            // Loading Spinner
+            const spinner = document.createElement('div');
+            spinner.className = 'absolute animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-indigo-500';
+            spinner.id = `spinner_${imgObj.id}`;
+            div.appendChild(spinner);
+            
+            return div;
+        }
+
+        function updateCardImage(card, url) {
+            if (!card?.id) return;
+            const id = card.id;
+            const spinner = card.querySelector(`[id="spinner_${id}"]`);
+            
+            const img = document.createElement('img');
+            img.className = 'thumb-img fade-in';
+            img.alt = images.find(item => item.id === id)?.file.name || '圖片預覽';
+            img.onload = () => {
+                spinner?.remove();
+                const imgObj = images.find(item => item.id === id);
+                if (!imgObj) return;
+                imgObj.loaded = true;
+                if (selectedImageId === id) updatePreviewPane(id);
+            };
+            img.onerror = () => {
+                spinner?.remove();
+                const errorMsg = document.createElement('span');
+                errorMsg.className = 'px-2 text-center text-xs text-rose-400';
+                errorMsg.textContent = '預覽載入失敗';
+                card.appendChild(errorMsg);
+            };
+
+            card.appendChild(img);
+            img.src = url;
+        }
+
+        // === 互動：選取與預覽 ===
+        function selectImage(id) {
+            const prevSelected = document.querySelector('.img-slot.selected');
+            if (prevSelected) prevSelected.classList.remove('selected');
+            
+            const currentCard = document.getElementById(id);
+            if (currentCard) currentCard.classList.add('selected');
+            
+            selectedImageId = id;
+            updatePreviewPane(id);
+        }
+
+        function removeSelectedImage() {
+            if(selectedImageId) removeImage(selectedImageId);
+        }
+        function getCardIds() {
+            return Array.from(gridContainer.querySelectorAll('.img-slot'), card => card.id);
+        }
+
+        function setSelection(ids, primaryId = null) {
+            const validIds = new Set(images.map(image => image.id));
+            selectedImageIds = new Set(Array.from(ids || []).filter(id => validIds.has(id)));
+
+            if (primaryId && selectedImageIds.has(primaryId)) {
+                selectedImageId = primaryId;
+            } else if (!selectedImageIds.has(selectedImageId)) {
+                selectedImageId = Array.from(selectedImageIds).at(-1) || null;
+            }
+
+            gridContainer.querySelectorAll('.img-slot').forEach(card => {
+                const isSelected = selectedImageIds.has(card.id);
+                card.classList.toggle('selected', isSelected);
+                card.setAttribute('aria-selected', String(isSelected));
+            });
+
+            const count = selectedImageIds.size;
+            selectionSummary.textContent = count ? `已選 ${count} 張` : '未選取';
+            removeSelectedLabel.textContent = count > 1 ? `移除所選 ${count} 張圖片` : '移除此圖片';
+
+            if (selectedImageId) updatePreviewPane(selectedImageId);
+            else updatePreviewPane(null);
+        }
+
+        function handleCardSelection(event, id) {
+            if (suppressNextCardClick) return;
+
+            const cardIds = getCardIds();
+            const additive = event.ctrlKey || event.metaKey;
+
+            if (event.shiftKey && selectionAnchorId && cardIds.includes(selectionAnchorId)) {
+                const anchorIndex = cardIds.indexOf(selectionAnchorId);
+                const currentIndex = cardIds.indexOf(id);
+                const [start, end] = anchorIndex < currentIndex
+                    ? [anchorIndex, currentIndex]
+                    : [currentIndex, anchorIndex];
+                const nextIds = additive ? new Set(selectedImageIds) : new Set();
+                cardIds.slice(start, end + 1).forEach(cardId => nextIds.add(cardId));
+                setSelection(nextIds, id);
+                return;
+            }
+
+            if (additive) {
+                const nextIds = new Set(selectedImageIds);
+                if (nextIds.has(id)) nextIds.delete(id);
+                else nextIds.add(id);
+                selectionAnchorId = id;
+                setSelection(nextIds, nextIds.has(id) ? id : null);
+                return;
+            }
+
+            selectionAnchorId = id;
+            setSelection([id], id);
+        }
+
+        function removeSelectedImage() {
+            const ids = Array.from(selectedImageIds);
+            if (!ids.length) return;
+            if (ids.length > 1 && !confirm(`確定要移除所選的 ${ids.length} 張圖片嗎？`)) return;
+            removeImages(ids);
+        }
+
+        function rectanglesIntersect(a, b) {
+            return a.left <= b.right && a.right >= b.left && a.top <= b.bottom && a.bottom >= b.top;
+        }
+
+        function updateMarquee(event) {
+            if (!marqueeState || event.pointerId !== marqueeState.pointerId) return;
+
+            const deltaX = event.clientX - marqueeState.startX;
+            const deltaY = event.clientY - marqueeState.startY;
+            if (!marqueeState.moved && Math.hypot(deltaX, deltaY) < 4) return;
+
+            marqueeState.moved = true;
+            if (!marqueeState.box) {
+                marqueeState.box = document.createElement('div');
+                marqueeState.box.className = 'selection-marquee';
+                document.body.appendChild(marqueeState.box);
+            }
+
+            const panelRect = leftPanel.getBoundingClientRect();
+            const edgeSize = 48;
+            if (event.clientY < panelRect.top + edgeSize) leftPanel.scrollBy(0, -18);
+            else if (event.clientY > panelRect.bottom - edgeSize) leftPanel.scrollBy(0, 18);
+
+            const left = Math.min(marqueeState.startX, event.clientX);
+            const top = Math.min(marqueeState.startY, event.clientY);
+            const right = Math.max(marqueeState.startX, event.clientX);
+            const bottom = Math.max(marqueeState.startY, event.clientY);
+            Object.assign(marqueeState.box.style, {
+                left: `${left}px`,
+                top: `${top}px`,
+                width: `${right - left}px`,
+                height: `${bottom - top}px`
+            });
+
+            const selectionRect = { left, top, right, bottom };
+            const nextIds = new Set(marqueeState.initialIds);
+            gridContainer.querySelectorAll('.img-slot').forEach(card => {
+                if (rectanglesIntersect(selectionRect, card.getBoundingClientRect())) {
+                    nextIds.add(card.id);
+                }
+            });
+            setSelection(nextIds);
+            event.preventDefault();
+        }
+
+        function finishMarquee(event) {
+            if (!marqueeState || (event && event.pointerId !== marqueeState.pointerId)) return;
+            const state = marqueeState;
+            marqueeState = null;
+            state.box?.remove();
+            leftPanel.classList.remove('marquee-active');
+            if (leftPanel.hasPointerCapture?.(state.pointerId)) {
+                leftPanel.releasePointerCapture(state.pointerId);
+            }
+            if (!state.moved && !state.additive) setSelection([]);
+            if (state.moved && selectedImageId) selectionAnchorId = selectedImageId;
+        }
+
+        leftPanel.addEventListener('pointerdown', event => {
+            if (event.button !== 0 || event.pointerType === 'touch' || !images.length) return;
+            if (event.target.closest('.img-slot, button, input, label')) return;
+
+            const additive = event.ctrlKey || event.metaKey || event.shiftKey;
+            marqueeState = {
+                pointerId: event.pointerId,
+                startX: event.clientX,
+                startY: event.clientY,
+                additive,
+                initialIds: additive ? new Set(selectedImageIds) : new Set(),
+                moved: false,
+                box: null
+            };
+            leftPanel.classList.add('marquee-active');
+            leftPanel.setPointerCapture?.(event.pointerId);
+            if (!additive) setSelection([]);
+            event.preventDefault();
+        });
+        leftPanel.addEventListener('pointermove', updateMarquee);
+        leftPanel.addEventListener('pointerup', finishMarquee);
+        leftPanel.addEventListener('pointercancel', finishMarquee);
+        leftPanel.addEventListener('lostpointercapture', finishMarquee);
+        window.addEventListener('blur', () => finishMarquee());
+
+        document.addEventListener('keydown', event => {
+            const activeElement = document.activeElement;
+            const isEditing = activeElement?.matches?.('input, textarea, select, [contenteditable="true"]');
+            if (isEditing) return;
+
+            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a' && images.length) {
+                event.preventDefault();
+                const allIds = getCardIds();
+                selectionAnchorId = allIds[0] || null;
+                setSelection(allIds, allIds.at(-1) || null);
+            } else if (event.key === 'Escape') {
+                finishMarquee();
+                setSelection([]);
+            } else if ((event.key === 'Delete' || event.key === 'Backspace') && selectedImageIds.size) {
+                event.preventDefault();
+                removeSelectedImage();
+            }
+        });
+
+
+        function getFileExtension(filename) {
+            const dotIndex = filename.lastIndexOf('.');
+            return dotIndex > 0 ? filename.slice(dotIndex) : '';
+        }
+
+        function buildOutputName(imgObj, index, prefix = prefixInput.value.trim(), suffix = suffixInput.value.trim(), pad = padZeroCheckbox.checked) {
+            const width = pad ? Math.max(2, String(images.length).length) : 0;
+            const number = String(index + 1).padStart(width, '0');
+            return `${prefix}${number}${suffix}${getFileExtension(imgObj.file.name)}`;
+        }
+
+        function hasInvalidFilenameCharacters(value) {
+            return /[<>:"/\\|?*\u0000-\u001F]/.test(value) || /[. ]$/.test(value);
+        }
+
+        function updatePreviewPane(id) {
+            const imgObj = images.find(img => img.id === id);
+            
+            if (!imgObj) {
+                noSelectionMsg.style.display = 'flex';
+                selectionInfo.style.display = 'none';
+                inspectorActions.classList.add('hidden');
+                return;
+            }
+
+            noSelectionMsg.style.display = 'none';
+            selectionInfo.style.display = 'flex';
+            inspectorActions.classList.remove('hidden');
+
+            if (imgObj.loaded) {
+                previewImg.src = imgObj.previewUrl;
+                previewImg.style.opacity = 0;
+                setTimeout(() => previewImg.style.opacity = 1, 50);
+            } else {
+                previewImg.src = ''; 
+            }
+
+            previewName.innerText = imgObj.file.name;
+            previewSize.innerText = formatBytes(imgObj.file.size);
+            previewType.innerText = imgObj.file.type || 'Unknown';
+
+            const index = images.indexOf(imgObj);
+            previewNewName.innerText = buildOutputName(imgObj, index);
+
+        }
+
+        function formatBytes(bytes, decimals = 2) {
+            if (!+bytes) return '0 Bytes';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+        }
+
+        // 監聽命名輸入改變
+        function updateAllPreviews() {
+            if (selectedImageId) {
+                updatePreviewPane(selectedImageId);
+            }
+        }
+        prefixInput.addEventListener('input', updateAllPreviews);
+        suffixInput.addEventListener('input', updateAllPreviews);
+        padZeroCheckbox.addEventListener('change', updateAllPreviews);
+
+        // === 刪除與清空 ===
+        function releasePreviewUrl(imgObj) {
+            if (imgObj?.previewUrl?.startsWith('blob:')) URL.revokeObjectURL(imgObj.previewUrl);
+        }
+
+        function removeImages(ids) {
+            const idsToRemove = new Set(ids);
+            if (!idsToRemove.size) return;
+
+            images.filter(img => idsToRemove.has(img.id)).forEach(releasePreviewUrl);
+            images = images.filter(img => !idsToRemove.has(img.id));
+
+            idsToRemove.forEach(id => {
+                selectedImageIds.delete(id);
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.style.transform = 'scale(0)';
+                setTimeout(() => el.remove(), 200);
+                selectedImageIds.delete(id);
+            });
+
+            if (idsToRemove.has(selectionAnchorId)) selectionAnchorId = null;
+            if (idsToRemove.has(selectedImageId)) {
+                selectedImageId = Array.from(selectedImageIds).at(-1) || null;
+            }
+            setSelection(selectedImageIds, selectedImageId);
+
+            if (images.length === 0) {
+                emptyMsg.classList.remove('hidden');
+                resetSourceHandle();
+                selectionAnchorId = null;
+            }
+            setTimeout(updateIndexes, 210);
+        }
+
+        function removeImage(id) {
+            removeImages([id]);
+        }
+
+        function clearAll() {
+            if (images.length === 0) return;
+            if(!confirm("確定要清空工作區嗎？")) return;
+
+            finishMarquee();
+            images.forEach(releasePreviewUrl);
+            images = [];
+            gridContainer.innerHTML = '';
+            emptyMsg.classList.remove('hidden');
+            resetSourceHandle();
+            selectionAnchorId = null;
+            setSelection([]);
+        }
+
+        function updateIndexes() {
+            const cards = gridContainer.querySelectorAll('.img-slot');
+            let currentIdx = 0;
+            const newOrderImages = [];
+            
+            Array.from(cards).forEach(card => {
+                const badge = card.querySelector('.index-badge');
+                if (badge) badge.innerText = currentIdx + 1;
+                const imgObj = images.find(img => img.id === card.id);
+                if (imgObj) {
+                    newOrderImages.push(imgObj);
+                    card.setAttribute('aria-label', `圖片 ${currentIdx + 1}: ${imgObj.file.name}`);
+                }
+                currentIdx++;
+            });
+            
+            if (newOrderImages.length === images.length) {
+                images = newOrderImages;
+            }
+            setSelection(selectedImageIds, selectedImageId);
+        }
+
+        // === 匯出邏輯 ===
+        async function smartExport() {
+            if (images.length === 0) {
+                showModal("提示", "工作區是空的，沒有圖片可以匯出。");
+                return;
+            }
+
+            const btn = document.getElementById('exportBtn');
+            const originalContent = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = `<svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> 處理中...`;
+
+            const prefix = prefixInput.value.trim();
+            const suffix = suffixInput.value.trim();
+            const padZero = padZeroCheckbox.checked;
+            const needClean = cleanMetaCheckbox.checked;
+            if (hasInvalidFilenameCharacters(prefix) || hasInvalidFilenameCharacters(suffix)) {
+                btn.disabled = false;
+                btn.innerHTML = originalContent;
+                showModal("命名規則無效", "前綴或後綴不可包含 < > : \" / \\ | ? * 等檔名字元。");
+                return;
+            }
+
+
+            try {
+                // 嘗試使用 File System Access API
+                if (!('showDirectoryPicker' in window)) throw new Error("FORCE_ZIP");
+
+                let targetDirHandle;
+                // 如果已經鎖定來源資料夾，嘗試取得寫入權限
+                if (sourceDirectoryHandle) {
+                    try {
+                        const perm = await sourceDirectoryHandle.requestPermission({ mode: 'readwrite' });
+                        if (perm === 'granted') targetDirHandle = sourceDirectoryHandle;
+                        else throw new Error("Permission denied");
+                    } catch (e) {
+                        // 權限失敗則另選
+                        targetDirHandle = await window.showDirectoryPicker({ mode: 'readwrite', startIn: 'pictures' });
+                    }
+                } else {
+                    targetDirHandle = await window.showDirectoryPicker({ mode: 'readwrite', startIn: 'pictures' });
+                }
+
+                showModal("處理中", needClean ? "正在清洗隱私資訊並寫入..." : "正在重新命名並寫入...", true);
+                const progressBar = document.getElementById('progressBar');
+                const newDirHandle = await targetDirHandle.getDirectoryHandle('Renamed_Export', { create: true });
+
+                for (let i = 0; i < images.length; i++) {
+                    const imgObj = images[i];
+                    const newName = buildOutputName(imgObj, i, prefix, suffix, padZero);
+                    
+                    const fileHandle = await newDirHandle.getFileHandle(newName, { create: true });
+                    const writable = await fileHandle.createWritable();
+                    
+                    if (needClean) {
+                        const cleanBlob = await cleanImageMetadata(imgObj.file);
+                        await writable.write(cleanBlob);
+                    } else {
+                        await writable.write(imgObj.file);
+                    }
+                    
+                    await writable.close();
+
+                    const percent = Math.round(((i + 1) / images.length) * 100);
+                    progressBar.style.width = `${percent}%`;
+                }
+                
+                closeModal();
+                showModal("匯出成功", `所有圖片已儲存至 "${targetDirHandle.name}/Renamed_Export" 資料夾。`);
+
+                // Success modal remains visible until the user closes it.
+            } catch (err) {
+                closeModal();
+                if (err.name === 'AbortError') { 
+                    // 使用者取消，不做事
+                } 
+                else if (err.name === 'SecurityError' || err.message.includes('Cross origin') || err.message === 'FORCE_ZIP') {
+                    // Fallback to ZIP
+                    console.warn("API 限制，切換為 ZIP 下載");
+                    await downloadAsZip(prefix, suffix, padZero, needClean);
+                } else {
+                    console.error(err);
+                    if(confirm("寫入資料夾失敗 (" + err.message + ")，是否改為下載 ZIP 檔？")) {
+                        await downloadAsZip(prefix, suffix, padZero, needClean);
+                    }
+                }
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalContent;
+            }
+        }
+
+        async function downloadAsZip(prefix, suffix, padZero, needClean) {
+            showModal("打包下載中", needClean ? "正在清洗資訊並壓縮..." : "正在壓縮圖片...", true);
+            const progressBar = document.getElementById('progressBar');
+            try {
+                const zip = new JSZip();
+                const folder = zip.folder("Renamed_Images");
+                
+                for (let i = 0; i < images.length; i++) {
+                    const imgObj = images[i];
+                    const newName = buildOutputName(imgObj, i, prefix, suffix, padZero);
+                    
+                    if (needClean) {
+                        const cleanBlob = await cleanImageMetadata(imgObj.file);
+                        folder.file(newName, cleanBlob);
+                    } else {
+                        folder.file(newName, imgObj.file);
+                    }
+                    
+                    const percent = Math.round(((i + 1) / images.length) * 100);
+                    progressBar.style.width = `${percent}%`;
+                }
+                
+                const content = await zip.generateAsync({type: "blob"});
+                saveAs(content, "Renamed_Images.zip");
+                closeModal();
+                
+            } catch (zipErr) {
+                closeModal();
+                alert("ZIP 打包失敗: " + zipErr.message);
+            }
+        }
+
+        // === Modal 視窗控制 ===
+        const modalOverlay = document.getElementById('modalOverlay');
+        const modalBox = document.getElementById('modalBox');
+        
+        function showModal(title, msg, showProgress = false) {
+            if (modalCloseTimer) {
+                clearTimeout(modalCloseTimer);
+                modalCloseTimer = null;
+            }
+            document.getElementById('modalTitle').innerText = title;
+            document.getElementById('modalMsg').innerText = msg;
+            
+            const pBar = document.getElementById('progressBarContainer');
+            const confirmBtn = document.getElementById('modalConfirmBtn');
+            const cancelBtn = document.getElementById('modalCancelBtn');
+
+            if (showProgress) {
+                pBar.classList.remove('hidden');
+                document.getElementById('progressBar').style.width = '0%';
+                confirmBtn.classList.add('hidden');
+                cancelBtn.classList.add('hidden');
+            } else {
+                pBar.classList.add('hidden');
+                confirmBtn.classList.remove('hidden');
+                // 簡單提示框不需要取消按鈕，除非是 Confirm (本例簡化為 Alert)
+            }
+
+            modalOverlay.classList.remove('hidden');
+            // 動畫
+            setTimeout(() => {
+                modalOverlay.classList.remove('opacity-0');
+                modalBox.classList.remove('scale-95');
+                modalBox.classList.add('scale-100');
+            }, 10);
+        }
+
+        function closeModal() {
+            modalOverlay.classList.add('opacity-0');
+            modalBox.classList.remove('scale-100');
+            modalBox.classList.add('scale-95');
+            modalCloseTimer = setTimeout(() => {
+                modalOverlay.classList.add('hidden');
+                modalCloseTimer = null;
+            }, 200);
+        }
+
+        window.addEventListener('beforeunload', () => {
+            images.forEach(releasePreviewUrl);
+        });
+
+        initSortable();
+    </script>
+</body>
+</html>
