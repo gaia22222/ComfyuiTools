@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Weighted Prompt Studio (Pro)</title>
+    <title>WILDCARD — Weighted Prompt Composer</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -31,290 +31,360 @@
     <style>
         :root {
             --result-font-size: 12px;
+            --ink: #171714;
+            --ink-soft: #32322e;
+            --paper: #f3f0e8;
+            --paper-deep: #e9e3d6;
+            --panel: #fffdf8;
+            --line: rgba(23, 23, 20, .16);
+            --muted: #77756e;
+            --orange: #ff6038;
+            --orange-dark: #d93d19;
+            --lime: #d9ff57;
+            --blue: #3558ff;
+            --radius: 18px;
         }
 
-        body { background-color: #09090b; color: #e4e4e7; user-select: none; }
-        
-        /* 滾動條 */
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        * { box-sizing: border-box; }
+        html { background: var(--paper); }
+        body {
+            margin: 0;
+            background:
+                radial-gradient(circle at 78% 8%, rgba(255, 96, 56, .12), transparent 28rem),
+                linear-gradient(90deg, rgba(23, 23, 20, .035) 1px, transparent 1px),
+                linear-gradient(rgba(23, 23, 20, .035) 1px, transparent 1px),
+                var(--paper);
+            background-size: auto, 32px 32px, 32px 32px, auto;
+            color: var(--ink);
+            font-family: Inter, "Microsoft JhengHei", "PingFang TC", system-ui, sans-serif;
+            user-select: none;
+        }
+        button, input, textarea, select { font: inherit; }
+        button { cursor: pointer; }
+
+        .custom-scrollbar { scrollbar-color: rgba(23, 23, 20, .28) transparent; scrollbar-width: thin; }
+        .custom-scrollbar::-webkit-scrollbar { width: 7px; height: 7px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 3px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #52525b; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(23, 23, 20, .24); border-radius: 99px; }
 
-        /* 卡片與輸入 */
+        .app-shell { min-width: 0; }
+        .topbar {
+            min-height: 82px;
+            padding: 0 22px;
+            border-bottom: 1px solid rgba(255,255,255,.12);
+            background: var(--ink);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+            flex: 0 0 auto;
+            z-index: 30;
+        }
+        .brand-lockup { display: flex; align-items: center; gap: 14px; min-width: 220px; }
+        .brand-token {
+            width: 43px;
+            height: 43px;
+            display: grid;
+            place-items: center;
+            border: 1px solid rgba(255,255,255,.32);
+            border-radius: 50%;
+            color: var(--lime);
+            font-family: Georgia, serif;
+            font-size: 20px;
+            font-style: italic;
+        }
+        .brand-name { font-size: 16px; font-weight: 800; letter-spacing: .14em; line-height: 1; }
+        .brand-subtitle { margin-top: 7px; color: #93938d; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
+        .header-cluster { display: flex; align-items: center; gap: 8px; }
+        .header-divider { width: 1px; height: 28px; background: rgba(255,255,255,.16); margin: 0 4px; }
+        .toolbar-btn, .primary-action, .ghost-danger {
+            min-height: 36px;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 0 14px;
+            border: 1px solid rgba(255,255,255,.18);
+            background: rgba(255,255,255,.07);
+            color: #e9e8e3;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: .04em;
+            transition: transform .18s ease, background .18s ease, border-color .18s ease;
+        }
+        .toolbar-btn:hover { background: rgba(255,255,255,.14); border-color: rgba(255,255,255,.34); transform: translateY(-1px); }
+        .primary-action { background: var(--lime); border-color: var(--lime); color: var(--ink); padding-inline: 18px; }
+        .primary-action:hover { background: #e5ff86; transform: translateY(-1px); }
+        .ghost-danger { border-color: transparent; background: transparent; color: #f09a86; padding-inline: 8px; }
+        .ghost-danger:hover { color: #ffb09d; background: rgba(255,96,56,.1); }
+        #tagCountBadge {
+            display: inline-flex;
+            align-items: center;
+            min-height: 27px;
+            padding: 0 10px;
+            margin: 0 2px;
+            border-radius: 999px;
+            background: rgba(217,255,87,.1);
+            color: var(--lime) !important;
+            font-size: 9px !important;
+            letter-spacing: .05em;
+        }
+        #tagCountBadge.hidden { display: none; }
+        #clearDbBtn { color: #c4c2bb !important; text-decoration: none !important; margin-left: 0 !important; }
+        #clearDbBtn:hover { color: #fff !important; }
+
+        .workspace { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 410px; }
+        .builder-panel { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+        .section-bar {
+            min-height: 88px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 18px 24px;
+            border-bottom: 1px solid var(--line);
+            background: rgba(243,240,232,.82);
+            backdrop-filter: blur(10px);
+        }
+        .section-kicker { color: var(--orange-dark); font: 800 10px/1 ui-monospace, SFMono-Regular, Consolas, monospace; letter-spacing: .16em; text-transform: uppercase; }
+        .section-title { margin-top: 7px; color: var(--ink); font-size: 22px; font-weight: 750; letter-spacing: -.035em; }
+        .section-help { margin-top: 4px; color: var(--muted); font-size: 11px; }
+        .add-block-button {
+            min-height: 42px;
+            padding: 0 17px;
+            border: 1px solid var(--ink);
+            border-radius: 12px;
+            background: var(--ink);
+            color: #fff;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: .04em;
+            box-shadow: 4px 4px 0 var(--orange);
+            transition: transform .16s ease, box-shadow .16s ease;
+        }
+        .add-block-button:hover { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--orange); }
+        .blocks-canvas { padding: 20px 24px 70px !important; }
+
         .block-card {
-            background-color: #18181b;
-            border: 1px solid #27272a;
-            border-radius: 8px;
-            margin-bottom: 12px;
-            transition: all 0.2s;
+            position: relative;
+            margin: 0 0 16px;
+            padding: 17px !important;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: rgba(255,253,248,.94);
+            box-shadow: 0 13px 32px rgba(41, 32, 19, .055);
+            transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
         }
-        .block-card:hover { border-color: #3f3f46; }
-        .block-card.disabled {
-            opacity: 0.5;
-            border-style: dashed;
-            background-color: #0f0f10;
+        .block-card::before {
+            content: attr(data-id);
+            position: absolute;
+            top: 19px;
+            left: -8px;
+            width: 20px;
+            height: 20px;
+            display: grid;
+            place-items: center;
+            border-radius: 50%;
+            background: var(--orange);
+            color: #fff;
+            font: 800 9px/1 ui-monospace, monospace;
         }
-        
+        .block-card:hover { border-color: rgba(23,23,20,.34); box-shadow: 0 18px 42px rgba(41,32,19,.09); }
+        .block-card.disabled { opacity: .48; border-style: dashed; background: rgba(233,227,214,.7); box-shadow: none; }
+        .block-title {
+            min-height: 34px;
+            padding: 5px 10px !important;
+            border: 0 !important;
+            border-bottom: 1px solid transparent !important;
+            border-radius: 0 !important;
+            background: transparent !important;
+            color: var(--ink) !important;
+            font-family: inherit !important;
+            font-size: 15px !important;
+            font-weight: 750 !important;
+        }
+        .block-title:focus { border-bottom-color: var(--orange) !important; }
+        .add-tag-btn { border: 0 !important; background: var(--paper-deep) !important; color: var(--ink-soft) !important; border-radius: 999px !important; padding: 6px 10px !important; }
+        .delete-block-btn { color: #9b9890 !important; }
+        .delete-block-btn:hover { color: var(--orange-dark) !important; }
+        .tag-row {
+            padding: 10px 11px !important;
+            margin-bottom: 7px;
+            border: 1px solid rgba(23,23,20,.11) !important;
+            border-radius: 12px !important;
+            background: #f6f3eb !important;
+        }
+        .tag-row:hover { border-color: rgba(23,23,20,.3) !important; background: #fffdf8 !important; }
+        .tag-row input[type="text"] { color: var(--ink) !important; font-size: 12px !important; }
+        .tag-row .prob-display { color: var(--orange-dark) !important; font-size: 12px !important; }
+        .tag-row .drag-handle { color: #aaa69c !important; }
+        .add-tag-bottom-btn {
+            min-height: 38px;
+            margin-top: 10px !important;
+            border: 1px dashed rgba(23,23,20,.25) !important;
+            border-radius: 12px !important;
+            color: #747168 !important;
+        }
+        .add-tag-bottom-btn:hover { border-color: var(--orange) !important; color: var(--orange-dark) !important; background: rgba(255,96,56,.05) !important; }
+
         input[type="text"], input[type="number"], textarea, select {
-            background: #27272a;
-            border: 1px solid #3f3f46;
-            color: white;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-family: 'JetBrains Mono', monospace;
-            outline: none;
-            transition: border-color 0.2s;
+            border: 1px solid rgba(23,23,20,.2);
+            border-radius: 10px;
+            background: rgba(255,255,255,.62);
+            color: var(--ink);
+            padding: 8px 10px;
+            font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
             font-size: 12px;
+            outline: none;
+            transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
         }
         input[type="text"]:focus, input[type="number"]:focus, textarea:focus, select:focus {
-            border-color: #3b82f6;
+            border-color: var(--orange);
+            background: #fff;
+            box-shadow: 0 0 0 3px rgba(255,96,56,.12);
         }
 
-        /* Manager Modal List Item */
-        .manager-item {
-            cursor: pointer;
-            border-bottom: 1px solid #27272a;
-        }
-        .manager-item:hover, .manager-item.active {
-            background-color: #27272a;
-        }
-        .manager-item.active {
-            border-left: 3px solid #3b82f6;
-        }
-
-        /* === 權重滑桿樣式 (Segmented Power Bar) === */
-        .weight-slider {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 100%;
-            height: 14px;
-            background: transparent;
-            cursor: pointer;
-            border-radius: 3px;
-            position: relative;
-            outline: none;
-            margin: 0;
-            padding: 0;
-        }
-
+        .weight-slider { -webkit-appearance: none; appearance: none; width: 100%; height: 16px; background: transparent; cursor: pointer; outline: none; margin: 0; padding: 0; }
         .weight-slider::-webkit-slider-runnable-track {
+            width: 100%; height: 9px; border: 0; border-radius: 99px;
+            background: linear-gradient(to right, var(--fill-color, var(--blue)) 0%, var(--fill-color, var(--blue)) var(--percent, 10%), #ded9cd var(--percent, 10%), #ded9cd 100%);
+        }
+        .weight-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -2.5px; border: 2px solid #fff; border-radius: 50%; background: var(--fill-color, var(--blue)); box-shadow: 0 0 0 1px rgba(23,23,20,.28); }
+        .weight-slider::-moz-range-thumb { width: 12px; height: 12px; border: 2px solid #fff; border-radius: 50%; background: var(--fill-color, var(--blue)); }
+        .prob-bar-container { height: 2px; margin-top: 3px; border-radius: 99px; overflow: hidden; background: rgba(23,23,20,.1); }
+        .prob-bar { height: 100%; background: var(--orange); transition: width .25s ease; }
+
+        .toggle-switch { position: relative; display: inline-block; width: 34px; height: 19px; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider { position: absolute; inset: 0; border-radius: 99px; cursor: pointer; background: #c9c4b8; transition: .2s; }
+        .toggle-slider::before { content: ""; position: absolute; width: 13px; height: 13px; left: 3px; top: 3px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: .2s; }
+        input:checked + .toggle-slider { background: var(--ink); }
+        input:checked + .toggle-slider::before { transform: translateX(15px); background: var(--lime); }
+
+        .inspector-panel { min-width: 0; min-height: 0; display: flex; flex-direction: column; border-left: 1px solid rgba(255,255,255,.1); background: var(--ink); color: #f5f3ec; }
+        .syntax-panel { padding: 20px; border-bottom: 1px solid rgba(255,255,255,.11); background: #20201d; }
+        .inspector-label { color: #9b9a93; font: 800 9px/1 ui-monospace, monospace; letter-spacing: .15em; text-transform: uppercase; }
+        .syntax-heading { margin-top: 7px; font-size: 17px; font-weight: 750; letter-spacing: -.02em; }
+        .save-indicator { color: #888880 !important; font-size: 9px !important; }
+        .save-indicator.text-green-500 { color: var(--lime) !important; }
+        .copy-mini { min-height: 32px; padding: 0 13px; border-radius: 999px; border: 0; background: var(--lime) !important; color: var(--ink) !important; font-size: 10px; font-weight: 800; }
+        #syntaxPreview {
             width: 100%;
-            height: 14px;
-            border-radius: 3px;
-            border: 1px solid #3f3f46;
-            background-image: 
-                repeating-linear-gradient(90deg, 
-                    transparent 0, 
-                    transparent calc(10% - 1px), 
-                    rgba(9, 9, 11, 0.8) calc(10% - 1px), 
-                    rgba(9, 9, 11, 0.8) 10%
-                ),
-                linear-gradient(to right, 
-                    var(--fill-color, #3b82f6) 0%, 
-                    var(--fill-color, #3b82f6) var(--percent, 10%), 
-                    #18181b var(--percent, 10%), 
-                    #18181b 100%
-                );
+            height: 118px;
+            margin-top: 13px;
+            padding: 13px 14px !important;
+            resize: none;
+            border: 1px solid rgba(255,255,255,.13) !important;
+            border-radius: 12px !important;
+            background: #121210 !important;
+            color: #dfded7 !important;
+            font-size: 11px !important;
+            line-height: 1.6;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
         }
+        #syntaxPreview:focus { border-color: rgba(217,255,87,.58) !important; box-shadow: 0 0 0 3px rgba(217,255,87,.09) !important; }
+        .inspector-tabs { min-height: 48px; display: grid; grid-template-columns: 1fr 1fr; padding: 7px; gap: 6px; border-bottom: 1px solid rgba(255,255,255,.1); }
+        .tab-btn { border: 1px solid transparent; border-radius: 9px; color: #888880; font-size: 10px; font-weight: 800; letter-spacing: .06em; }
+        .tab-btn:hover { color: #d7d6d0; background: rgba(255,255,255,.05); }
+        .tab-btn.active { border-color: rgba(255,255,255,.11); background: rgba(255,255,255,.09); color: var(--lime); }
+        .inspector-content { min-height: 0; }
+        #tab-simulation, #tab-charts { background: var(--ink) !important; }
+        #tab-simulation > div:first-child { background: #1d1d1a !important; border-color: rgba(255,255,255,.1) !important; }
+        #tab-simulation > div:nth-child(2) { border-color: rgba(255,255,255,.1) !important; }
+        #tab-simulation button.w-full { min-height: 38px; border-radius: 10px !important; background: var(--orange) !important; color: #fff; box-shadow: none !important; }
+        #resultsContainer { background: var(--ink) !important; }
+        #chartsContainer > div { margin-bottom: 12px; border: 1px solid rgba(255,255,255,.09) !important; border-radius: 13px !important; background: #20201d !important; }
+        .result-card { position: relative; padding: 12px; border: 1px solid rgba(255,255,255,.1); border-radius: 11px; background: #21211e; color: #d6d5cf; font: var(--result-font-size)/1.55 ui-monospace, monospace; word-break: break-word; cursor: pointer; transition: border-color .15s, transform .15s; }
+        .result-card:hover { border-color: rgba(217,255,87,.45); transform: translateY(-1px); }
 
-        .weight-slider::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            height: 14px;
-            width: 10%; 
-            background: transparent;
-            cursor: pointer;
-            border: none;
-        }
+        #emptyState { opacity: 1 !important; min-height: 330px; border: 1px dashed rgba(23,23,20,.25); border-radius: var(--radius); background: rgba(255,255,255,.2); }
+        #emptyState svg { display: none; }
+        #emptyState::before { content: "W"; width: 66px; height: 66px; display: grid; place-items: center; margin-bottom: 16px; border: 1px solid var(--ink); border-radius: 50%; color: var(--orange); font: italic 30px Georgia, serif; }
+        #emptyState p { color: var(--ink-soft) !important; font-size: 14px; }
+        #emptyState p::after { content: "\A建立多組 Tag，再由權重決定每次抽中的機率。"; white-space: pre; display: block; margin-top: 8px; color: var(--muted); font-size: 11px; font-weight: 400; }
 
-        .weight-slider::-moz-range-thumb {
-            height: 14px;
-            width: 10%;
-            background: transparent;
-            cursor: pointer;
-            border: none;
-        }
-        
-        .weight-slider:hover { opacity: 0.95; }
-        .weight-slider:active { opacity: 1; }
+        #suggestionBox { position: absolute; display: none; z-index: 9999; max-height: 270px; overflow-y: auto; width: 280px; border: 1px solid rgba(23,23,20,.24); border-radius: 13px; background: #fffdf8; color: var(--ink); font-family: ui-monospace, monospace; box-shadow: 0 20px 55px rgba(28,23,15,.2); }
+        .suggestion-item { padding: 9px 11px; border-bottom: 1px solid rgba(23,23,20,.09); cursor: pointer; }
+        .suggestion-item:last-child { border-bottom: 0; }
+        .suggestion-item:hover, .suggestion-item.active { background: var(--ink); color: #fff; }
+        .suggestion-item:hover .suggestion-tag, .suggestion-item.active .suggestion-tag { color: var(--lime) !important; }
+        .suggestion-tag { font-size: 12px; font-weight: 800; }
+        .suggestion-meta { display: flex; justify-content: space-between; margin-top: 2px; color: #89867e; font-size: 9px; }
+        .suggestion-item:hover .suggestion-meta, .suggestion-item.active .suggestion-meta { color: #aaa9a3; }
+        .match-highlight { text-decoration: underline; text-decoration-color: var(--orange); text-underline-offset: 2px; }
 
-        /* 機率條 */
-        .prob-bar-container {
-            height: 3px;
-            background: #27272a;
-            border-radius: 2px;
-            overflow: hidden;
-            margin-top: 2px;
-        }
-        .prob-bar {
-            height: 100%;
-            background: #3b82f6;
-            transition: width 0.3s ease;
-        }
+        #tagManagerModal, #dataModal { display: none; padding: 20px; background: rgba(16,16,14,.72) !important; backdrop-filter: blur(15px); }
+        #tagManagerModal.active, #dataModal.active { display: flex; }
+        #tagManagerModal > div, #dataModal > div { border: 0 !important; border-radius: 22px !important; background: var(--panel) !important; color: var(--ink); box-shadow: 0 35px 90px rgba(0,0,0,.38); }
+        #tagManagerModal > div > div:first-child, #dataModal > div > div:first-child { background: var(--ink) !important; border: 0 !important; min-height: 58px; padding-inline: 18px; }
+        #tagManagerModal > div > div:first-child h2, #dataModal > div > div:first-child h2 { color: #fff !important; font-size: 13px; letter-spacing: .03em; }
+        #tagManagerModal .bg-bg-surface\/50 { background: var(--paper-deep) !important; border-color: var(--line) !important; }
+        #tagManagerModal .bg-bg-panel { background: var(--panel) !important; }
+        #tagManagerModal label, #dataModal label, #dataModal p { color: var(--muted) !important; }
+        #tagManagerModal .text-white, #dataModal .text-white { color: #fff !important; }
+        #managerEditPanel h3 { color: var(--ink) !important; border-color: var(--line) !important; }
+        #managerEditEmpty { color: #8c887d !important; }
+        .manager-item { border-bottom: 1px solid rgba(23,23,20,.1); cursor: pointer; }
+        .manager-item:hover { background: rgba(255,255,255,.55); }
+        .manager-item.active { border-left: 4px solid var(--orange); background: #fffdf8; }
+        #dataModal > div > .flex.border-b { background: var(--paper-deep) !important; border-color: var(--line) !important; }
+        #dataModal [class*="border-dashed"] { border-color: rgba(23,23,20,.22) !important; background: var(--paper) !important; }
+        #dataModal [class*="border-dashed"]:hover { border-color: var(--orange) !important; }
+        #dataExportPanel button { border-color: var(--line) !important; border-radius: 13px !important; background: var(--paper) !important; }
+        #dataExportPanel button:hover { border-color: var(--orange) !important; background: #fff !important; }
+        #dataExportPanel button .text-white { color: var(--ink) !important; }
+        #importPreviewEmpty { color: var(--muted) !important; }
+        #conflictOptions { border-color: var(--line) !important; background: var(--paper) !important; }
 
-        /* 結果卡片 */
-        .result-card {
-            background: #18181b;
-            border: 1px solid #27272a;
-            padding: 10px;
-            border-radius: 6px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: var(--result-font-size);
-            color: #d4d4d8;
-            word-break: break-all;
-            cursor: pointer;
-            position: relative;
-            line-height: 1.4;
-        }
-        .result-card:hover { border-color: #4b5563; background: #27272a; }
-        .result-card:active { transform: scale(0.99); }
+        #dragOverlay { transition: opacity .2s, visibility .2s; }
+        #dragOverlay.active { opacity: 1; visibility: visible; }
+        #dragOverlay > div { border: 2px dashed var(--lime) !important; border-radius: 24px; background: rgba(23,23,20,.9); }
+        #loadingOverlay { display: none; background: rgba(23,23,20,.88) !important; }
+        #loadingOverlay.active { display: flex; }
+        #loadingOverlay svg { color: var(--lime) !important; }
 
-        /* 拖曳樣式 */
-        .sortable-ghost { opacity: 0.4; background: #3b82f6; }
+        @keyframes slideIn { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes fadeOut { from { opacity: 1; } to { transform: translateY(8px); opacity: 0; } }
+        .toast-item { animation: slideIn .25s ease-out forwards; border-radius: 12px !important; background: var(--ink) !important; }
+        .toast-item.hiding { animation: fadeOut .2s ease-in forwards; }
+        .sortable-ghost { opacity: .25; background: var(--orange) !important; }
         .drag-handle { cursor: grab; }
         .drag-handle:active { cursor: grabbing; }
+        .sortable-fallback { opacity: 1 !important; z-index: 99999 !important; border: 1px solid var(--orange) !important; background: var(--panel) !important; box-shadow: 0 20px 55px rgba(0,0,0,.25); cursor: grabbing !important; transform: rotate(1deg); }
+        .sortable-drag { opacity: 0; }
 
-        /* 自動完成建議選單 */
-        #suggestionBox {
-            position: absolute;
-            background-color: #18181b;
-            border: 1px solid #3f3f46;
-            border-radius: 6px;
-            max-height: 240px;
-            overflow-y: auto;
-            z-index: 9999;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
-            display: none;
-            width: 250px;
-            font-family: 'JetBrains Mono', monospace;
+        @media (max-width: 980px) {
+            body { height: auto !important; min-height: 100vh; overflow: auto !important; }
+            .topbar { align-items: flex-start; flex-wrap: wrap; padding: 16px; }
+            .brand-lockup { flex: 1 0 210px; }
+            .header-cluster { flex-wrap: wrap; }
+            .workspace { display: flex; flex-direction: column; overflow: visible !important; }
+            .builder-panel { min-height: 68vh; }
+            .inspector-panel { min-height: 720px; border-left: 0; border-top: 1px solid rgba(255,255,255,.1); }
+            .blocks-canvas { min-height: 420px; }
         }
-        .suggestion-item {
-            padding: 6px 10px;
-            cursor: pointer;
-            display: flex;
-            flex-direction: column;
-            border-bottom: 1px solid #27272a;
-        }
-        .suggestion-item:last-child { border-bottom: none; }
-        .suggestion-item:hover, .suggestion-item.active {
-            background-color: #3b82f6;
-            color: white;
-        }
-        .suggestion-item:hover .suggestion-tag, .suggestion-item.active .suggestion-tag { color: white !important; }
-        
-        .suggestion-tag { font-size: 12px; font-weight: bold; }
-        .suggestion-meta { font-size: 10px; color: #a1a1aa; display: flex; justify-content: space-between; }
-        .suggestion-item:hover .suggestion-meta, .suggestion-item.active .suggestion-meta { color: #dbeafe; }
-        .match-highlight { text-decoration: underline; opacity: 0.8; background-color: rgba(255, 255, 255, 0.1); }
-
-        /* 拖曳遮罩 */
-        #dragOverlay {
-            transition: opacity 0.2s, visibility 0.2s;
-        }
-        #dragOverlay.active {
-            opacity: 1;
-            visibility: visible;
-        }
-        
-        /* 載入中遮罩 */
-        #loadingOverlay {
-            display: none;
-        }
-        #loadingOverlay.active {
-            display: flex;
-        }
-
-        /* Tag Manager Modal */
-        #tagManagerModal {
-            display: none;
-        }
-        #tagManagerModal.active {
-            display: flex;
-        }
-
-        /* Toggle Switch */
-        .toggle-checkbox:checked {
-            right: 0;
-            border-color: #4ade80;
-        }
-        .toggle-checkbox:checked + .toggle-label {
-            background-color: #4ade80;
-        }
-        .toggle-switch {
-            position: relative;
-            display: inline-block;
-            width: 32px;
-            height: 18px;
-        }
-        .toggle-slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background-color: #3f3f46;
-            transition: .4s;
-            border-radius: 18px;
-        }
-        .toggle-slider:before {
-            position: absolute;
-            content: "";
-            height: 14px;
-            width: 14px;
-            left: 2px;
-            bottom: 2px;
-            background-color: white;
-            transition: .4s;
-            border-radius: 50%;
-        }
-        input:checked + .toggle-slider {
-            background-color: #3b82f6;
-        }
-        input:checked + .toggle-slider:before {
-            transform: translateX(14px);
-        }
-
-        /* Tabs */
-        .tab-btn {
-            border-bottom: 2px solid transparent;
-            color: #71717a;
-        }
-        .tab-btn.active {
-            border-bottom-color: #3b82f6;
-            color: #fff;
-        }
-
-        /* Toast Animation */
-        @keyframes slideIn {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-        }
-        @keyframes fadeOut {
-            from { transform: translateX(0); opacity: 1; }
-            to { transform: translateX(100%); opacity: 0; }
-        }
-        .toast-item {
-            animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        }
-        .toast-item.hiding {
-            animation: fadeOut 0.3s ease-in forwards;
-        }
-        
-        .sortable-fallback {
-            opacity: 1 !important;
-            background: #27272a !important; /* 強制深色背景，避免透明 */
-            border: 1px solid #3b82f6;      /* 藍色邊框標示 */
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
-            z-index: 99999 !important;      /* 確保在最上層 */
-            cursor: grabbing !important;
-            transform: scale(1.02);         /* 稍微放大增加浮動感 */
-        }
-        /* 隱藏原本位置的元素，只顯示 Ghost(佔位) 和 Fallback(拖曳物) */
-        .sortable-drag {
-            opacity: 0;
+        @media (max-width: 640px) {
+            .topbar { gap: 13px; }
+            .brand-subtitle { display: none; }
+            .header-cluster { width: 100%; }
+            .header-divider, #clearDbBtn { display: none !important; }
+            .toolbar-btn { flex: 1; padding-inline: 9px; }
+            .primary-action { flex: 1 0 100%; }
+            .section-bar { align-items: flex-start; padding: 16px; }
+            .section-title { font-size: 19px; }
+            .section-help { max-width: 220px; }
+            .blocks-canvas { padding: 14px 14px 50px !important; }
+            .block-card { padding: 13px !important; }
+            #tagManagerModal, #dataModal { padding: 8px; }
+            #tagManagerModal > div { width: 100% !important; height: 92vh !important; }
+            #tagManagerModal > div > .flex-1 { flex-direction: column; overflow-y: auto; }
+            #tagManagerModal > div > .flex-1 > div { width: 100% !important; min-height: 330px; border-right: 0 !important; }
         }
     </style>
 </head>
-<body class="flex flex-col h-screen overflow-hidden text-sm">
+<body class="app-shell flex flex-col h-screen overflow-hidden text-sm">
 
     <!-- Toast Container (Notification Area) -->
     <div id="toast-container" class="fixed bottom-5 right-5 z-[100] flex flex-col gap-2 pointer-events-none"></div>
@@ -341,6 +411,9 @@
                         <button onclick="createNewTagState()" class="w-full bg-green-700 hover:bg-green-600 text-white text-xs font-bold py-2 rounded transition flex items-center justify-center gap-2 shadow-lg shadow-green-900/20">
                              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                              新增標籤
+                        </button>
+                        <button onclick="setAllTagsToMeta()" class="w-full bg-purple-700/80 hover:bg-purple-600 text-white text-xs font-bold py-2 rounded transition flex items-center justify-center gap-2" title="將資料庫內所有 Tags 的分類設為 Meta (5)">
+                             全部設為 Meta（高品質）
                         </button>
                         <input type="text" id="managerSearch" class="w-full" placeholder="搜尋 Tag..." oninput="renderManagerList(this.value)">
                     </div>
@@ -407,6 +480,59 @@
         </div>
     </div>
 
+    <!-- Import / Export Modal -->
+    <div id="dataModal" class="fixed inset-0 bg-black/80 z-50 items-center justify-center backdrop-blur-sm">
+        <div class="bg-bg-panel border border-zinc-700 w-[92%] max-w-3xl max-h-[86vh] rounded-lg shadow-2xl flex flex-col overflow-hidden">
+            <div class="h-12 bg-zinc-900 border-b border-zinc-700 flex items-center justify-between px-4 shrink-0">
+                <h2 class="text-white font-bold">資料匯入 / 匯出</h2>
+                <button onclick="closeDataModal()" class="text-zinc-500 hover:text-white transition" aria-label="關閉資料視窗">✕</button>
+            </div>
+            <div class="flex border-b border-zinc-700 bg-zinc-900/60 shrink-0">
+                <button id="dataImportTab" onclick="switchDataTab('import')" class="flex-1 py-3 text-xs font-bold text-blue-400 border-b-2 border-blue-500">匯入</button>
+                <button id="dataExportTab" onclick="switchDataTab('export')" class="flex-1 py-3 text-xs font-bold text-zinc-500 border-b-2 border-transparent">匯出</button>
+            </div>
+
+            <div id="dataImportPanel" class="p-5 overflow-y-auto custom-scrollbar">
+                <label class="border-2 border-dashed border-zinc-700 hover:border-blue-500 rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer transition bg-zinc-900/40">
+                    <span class="text-sm font-bold text-zinc-200">選擇 CSV、JSON 或 TXT</span>
+                    <span class="text-[11px] text-zinc-500 mt-1">支援多個 Tag CSV、Workspace、完整備份及 Prompt 語法</span>
+                    <input type="file" id="dataFileInput" accept=".csv,.json,.txt" multiple class="hidden" onchange="prepareImportFiles(this.files)">
+                </label>
+
+                <div id="importPreviewEmpty" class="text-center text-zinc-600 text-xs py-8">選擇檔案後會先顯示預覽，不會立即改動資料。</div>
+                <div id="importPreview" class="hidden mt-4 space-y-4">
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2" id="importStats"></div>
+                    <div id="importWarnings" class="hidden text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded p-3 whitespace-pre-line"></div>
+                    <div id="conflictOptions" class="bg-zinc-900/60 border border-zinc-700 rounded p-3">
+                        <label class="block text-xs text-zinc-400 mb-2">同名 Tag 處理方式</label>
+                        <select id="importConflictMode" class="w-full">
+                            <option value="merge">合併 aliases，保留較高 count</option>
+                            <option value="overwrite">以匯入資料覆蓋</option>
+                            <option value="keep">保留現有資料</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center justify-between gap-3">
+                        <button id="undoImportBtn" onclick="undoLastImport()" class="hidden text-xs text-amber-400 hover:text-amber-300 px-3 py-2">撤銷上次匯入</button>
+                        <div class="ml-auto flex gap-3">
+                            <button onclick="clearImportPreview()" class="px-4 py-2 text-xs text-zinc-400 hover:text-white">取消</button>
+                            <button id="confirmImportBtn" onclick="confirmPreparedImport()" class="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-bold">確認匯入</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="dataExportPanel" class="hidden p-5 overflow-y-auto custom-scrollbar">
+                <p class="text-xs text-zinc-400 mb-4">選擇要下載的格式。完整備份包含 Tag 資料庫及 Prompt Blocks。</p>
+                <div class="grid md:grid-cols-2 gap-3">
+                    <button onclick="exportTagsCSV()" class="text-left p-4 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded transition"><span class="block text-sm font-bold text-white">Tags CSV</span><span class="block text-[11px] text-zinc-500 mt-1">供試算表編輯或與其他工具交換</span></button>
+                    <button onclick="exportWorkspaceJSON()" class="text-left p-4 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded transition"><span class="block text-sm font-bold text-white">Workspace JSON</span><span class="block text-[11px] text-zinc-500 mt-1">保存目前 Blocks、權重、名稱及啟用狀態</span></button>
+                    <button onclick="exportFullBackupJSON()" class="text-left p-4 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded transition"><span class="block text-sm font-bold text-white">完整備份 JSON</span><span class="block text-[11px] text-zinc-500 mt-1">Tags 與 Workspace 一次備份，可完整還原</span></button>
+                    <button onclick="exportSyntaxTXT()" class="text-left p-4 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded transition"><span class="block text-sm font-bold text-white">Prompt Syntax TXT</span><span class="block text-[11px] text-zinc-500 mt-1">只輸出目前組合語法</span></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 載入中遮罩 -->
     <div id="loadingOverlay" class="fixed inset-0 bg-black/90 z-[60] flex flex-col items-center justify-center backdrop-blur-sm">
         <div class="flex items-center gap-3 text-white mb-2">
@@ -423,68 +549,71 @@
     <div id="dragOverlay" class="fixed inset-0 bg-black/80 z-50 opacity-0 invisible flex flex-col items-center justify-center backdrop-blur-sm">
         <div class="border-4 border-dashed border-zinc-500 rounded-xl p-12 text-center pointer-events-none">
             <svg class="w-20 h-20 text-zinc-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
-            <h2 class="text-2xl font-bold text-zinc-200 mb-2">釋放以匯入 CSV</h2>
-            <p class="text-zinc-400">支援多檔，資料將自動存入瀏覽器資料庫</p>
+            <h2 class="text-2xl font-bold text-zinc-200 mb-2">釋放以預覽匯入資料</h2>
+            <p class="text-zinc-400">支援 CSV、JSON、TXT；確認前不會改動資料</p>
         </div>
     </div>
 
     <!-- 頂部列 -->
-    <header class="h-12 bg-bg-panel border-b border-zinc-800 flex items-center justify-between px-4 shrink-0 z-30">
-        <div class="flex items-center gap-2">
-            <div class="flex items-center gap-2 text-zinc-100 font-bold tracking-wide mr-2">
-                <svg class="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg>
-                Weighted Prompt Studio
+    <header class="topbar shrink-0 z-30">
+        <div class="header-cluster">
+            <div class="brand-lockup">
+                <span class="brand-token" aria-hidden="true">W</span>
+                <span><span class="brand-name block">WILDCARD</span><span class="brand-subtitle block">Weighted prompt composer</span></span>
             </div>
             
-            <label class="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded cursor-pointer border border-zinc-700 transition group" title="可選擇多個檔案，會累加至現有資料">
+            <button onclick="openDataModal('import')" class="toolbar-btn group" title="匯入 Tags、Workspace 或完整備份">
                 <svg class="w-4 h-4 text-green-500 group-hover:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
                 <span class="text-xs text-zinc-300">匯入</span>
-                <input type="file" id="csvFileInput" accept=".csv" multiple class="hidden" onchange="loadTagsFromCSV(this.files)">
-            </label>
+            </button>
 
-            <button onclick="exportToCSV()" class="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded border border-zinc-700 transition group" title="導出當前所有 Tag 為 CSV">
+            <button onclick="openDataModal('export')" class="toolbar-btn group" title="匯出 Tags、Workspace 或完整備份">
                 <svg class="w-4 h-4 text-blue-500 group-hover:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                <span class="text-xs text-zinc-300">導出</span>
+                <span class="text-xs text-zinc-300">匯出</span>
             </button>
             
             <!-- Manager Button -->
-            <button onclick="openTagManager()" class="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded border border-zinc-700 transition group" title="管理資料庫內容">
+            <button onclick="openTagManager()" class="toolbar-btn group" title="管理資料庫內容">
                 <svg class="w-4 h-4 text-zinc-400 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path></svg>
                 <span class="text-xs text-zinc-300">管理</span>
             </button>
 
             <span id="tagCountBadge" class="text-[10px] text-zinc-500 font-mono hidden ml-2">0 tags loaded</span>
             
-            <button onclick="clearDatabase()" class="text-[10px] text-red-500 hover:text-red-400 underline hidden ml-2" id="clearDbBtn">清除快取資料</button>
+            <button onclick="clearDatabase()" class="toolbar-btn hidden" id="clearDbBtn">還原預設 Tags</button>
         </div>
         
-        <div class="flex items-center gap-4">
-            <button onclick="copyFullSyntax()" class="text-zinc-400 hover:text-white flex items-center gap-2 px-3 py-1.5 rounded hover:bg-zinc-800 transition text-xs">
+        <div class="header-cluster">
+            <button onclick="copyFullSyntax()" class="primary-action">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path></svg>
                 複製語法
             </button>
-            <div class="h-4 w-px bg-zinc-700"></div>
-            <button onclick="resetAll()" class="text-red-400 hover:text-red-300 text-xs font-bold px-2">清空</button>
+            <div class="header-divider"></div>
+            <button onclick="resetAll()" class="ghost-danger">清空工作區</button>
         </div>
     </header>
 
     <!-- 主內容 -->
-    <div class="flex-1 flex overflow-hidden relative bg-bg-main">
+    <main class="workspace flex-1 overflow-hidden relative">
         
         <!-- 左側：編輯器 (Builder) -->
-        <div class="flex-1 flex flex-col min-w-[320px] border-r border-zinc-800">
+        <section class="builder-panel">
             
             <!-- 工具列 -->
-            <div class="h-9 border-b border-zinc-800 bg-zinc-900/50 flex items-center justify-between px-4 shrink-0">
-                <span class="text-[10px] font-bold text-zinc-500 uppercase">Prompt Blocks</span>
-                <button onclick="addBlock()" class="text-accent hover:text-blue-400 text-[10px] font-bold flex items-center gap-1 transition">
+            <div class="section-bar shrink-0">
+                <div>
+                    <div class="section-kicker">01 / Compose</div>
+                    <h1 class="section-title">建立你的 Prompt 配方</h1>
+                    <p class="section-help">每個區塊抽出一個 Tag；滑動權重決定出現機率。</p>
+                </div>
+                <button onclick="addBlock()" class="add-block-button">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                     新增區塊
                 </button>
             </div>
 
             <!-- 區塊列表區 -->
-            <div class="flex-1 overflow-y-auto custom-scrollbar p-3 relative" id="blocksContainer">
+            <div class="blocks-canvas flex-1 overflow-y-auto custom-scrollbar relative" id="blocksContainer">
                 <!-- 動態生成區塊 -->
                 
                 <!-- 空狀態 -->
@@ -493,20 +622,20 @@
                     <p class="text-zinc-400 font-medium">點擊「新增區塊」開始建立</p>
                 </div>
             </div>
-        </div>
+        </section>
 
         <!-- 右側：預覽與測試 -->
-        <div class="w-[360px] bg-bg-panel border-l border-zinc-800 flex flex-col z-20 shrink-0">
+        <aside class="inspector-panel z-20">
             
             <!-- 1. 語法預覽區域 -->
-            <div class="p-3 bg-zinc-900 border-b border-zinc-800 shrink-0">
+            <div class="syntax-panel shrink-0">
                 <div class="flex justify-between items-center mb-2">
-                    <span class="text-[10px] font-bold text-zinc-500 uppercase">目前組合語法</span>
+                    <span><span class="inspector-label block">Live syntax</span><span class="syntax-heading block">目前組合語法</span></span>
                     
                     <div class="flex gap-2 items-center">
-                        <span id="saveStatus" class="text-[10px] text-zinc-600 transition-colors mr-1">區塊已儲存</span>
+                        <span id="saveStatus" class="save-indicator transition-colors">已儲存</span>
                         <!-- 複製按鈕 (放大) -->
-                        <button onclick="clickToCopySyntax()" class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded shadow shadow-blue-900/20 transition font-bold flex items-center gap-1">
+                        <button onclick="clickToCopySyntax()" class="copy-mini flex items-center gap-1">
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path></svg>
                             複製
                         </button>
@@ -517,13 +646,13 @@
             </div>
 
             <!-- Tab Header (預設 Chart active) -->
-            <div class="h-9 border-b border-zinc-800 flex items-center gap-1 px-2 bg-bg-panel select-none shrink-0">
-                <button class="tab-btn px-3 py-1.5 text-xs font-bold active" data-tab="charts" onclick="switchTab('charts')">圖表</button>
-                <button class="tab-btn px-3 py-1.5 text-xs font-bold" data-tab="simulation" onclick="switchTab('simulation')">模擬</button>
+            <div class="inspector-tabs select-none shrink-0">
+                <button class="tab-btn px-3 py-1.5 text-xs font-bold active" data-tab="charts" onclick="switchTab('charts')">機率分布</button>
+                <button class="tab-btn px-3 py-1.5 text-xs font-bold" data-tab="simulation" onclick="switchTab('simulation')">抽樣結果</button>
             </div>
 
             <!-- Tab Content -->
-            <div class="flex-1 flex flex-col overflow-hidden relative">
+            <div class="inspector-content flex-1 flex flex-col overflow-hidden relative">
                 
                 <!-- 2. Simulation Tab (預設 hidden) -->
                 <div id="tab-simulation" class="flex flex-col h-full absolute inset-0 hidden">
@@ -563,8 +692,8 @@
                 </div>
 
             </div>
-        </div>
-    </div>
+        </aside>
+    </main>
 
     <!-- 自動完成選單容器 (全域) -->
     <div id="suggestionBox"></div>
@@ -586,7 +715,7 @@
                     <button class="add-tag-btn text-[10px] bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white px-2 py-0.5 rounded transition border border-zinc-700">
                         + Tag
                     </button>
-                    <button class="delete-block-btn text-zinc-600 hover:text-red-400 p-1 transition">
+                    <button class="delete-block-btn text-zinc-600 hover:text-red-400 p-1 transition" aria-label="刪除區塊" title="刪除區塊">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                     </button>
                 </div>
@@ -624,6 +753,21 @@
         const chartsContainer = document.getElementById('chartsContainer');
         const chartsEmptyState = document.getElementById('chartsEmptyState');
 
+        // Import / Export Elements
+        const dataModal = document.getElementById('dataModal');
+        const dataImportPanel = document.getElementById('dataImportPanel');
+        const dataExportPanel = document.getElementById('dataExportPanel');
+        const dataImportTab = document.getElementById('dataImportTab');
+        const dataExportTab = document.getElementById('dataExportTab');
+        const dataFileInput = document.getElementById('dataFileInput');
+        const importPreview = document.getElementById('importPreview');
+        const importPreviewEmpty = document.getElementById('importPreviewEmpty');
+        const importStats = document.getElementById('importStats');
+        const importWarnings = document.getElementById('importWarnings');
+        const conflictOptions = document.getElementById('conflictOptions');
+        const confirmImportBtn = document.getElementById('confirmImportBtn');
+        const undoImportBtn = document.getElementById('undoImportBtn');
+
         // Manager Elements
         const tagManagerModal = document.getElementById('tagManagerModal');
         const managerList = document.getElementById('managerList');
@@ -643,8 +787,13 @@
         let chartInstances = []; 
         let currentTab = 'charts'; 
         let debounceTimer; // Timer for auto-sync
+        let pendingImport = null;
+        let lastImportBackup = null;
         
         let editingTagOriginalKey = null; // Track which tag is being edited in manager (null if new)
+        const TAGS_INITIALIZED_KEY = 'promptStudioTagsInitialized';
+        const TAGS_NORMALIZED_KEY = 'promptStudioTagsNormalizedV1';
+        const DATA_SCHEMA_VERSION = 1;
 
         // ==========================================
         //  設定區：自動載入同層 CSV
@@ -676,6 +825,50 @@
         
         // 初始化標籤庫
         let tagDB = [];
+
+        function normalizeTagName(value) {
+            let normalized = String(value ?? '').trim();
+            if (normalized.length >= 2 && normalized.startsWith('"') && normalized.endsWith('"')) {
+                normalized = normalized.slice(1, -1).replace(/""/g, '"');
+            }
+            return normalized.replace(/\s+/g, '_');
+        }
+
+        function normalizeTagRecord(tag) {
+            const key = normalizeTagName(tag?.t ?? tag?.tag);
+            const category = Number.parseInt(tag?.cat ?? tag?.category, 10);
+            const count = Number.parseInt(tag?.c ?? tag?.count, 10);
+            return {
+                t: key,
+                cat: Number.isFinite(category) ? category : 0,
+                c: Number.isFinite(count) && count >= 0 ? count : 0,
+                a: String(tag?.a ?? tag?.alias ?? tag?.aliases ?? '').trim()
+            };
+        }
+
+        function normalizeBlocks(blockList) {
+            if (!Array.isArray(blockList)) return [];
+            return blockList.map((block, blockIndex) => ({
+                id: Number.isFinite(Number(block.id)) ? Number(block.id) : Date.now() + blockIndex,
+                title: String(block.title ?? ''),
+                enabled: block.enabled !== false,
+                tags: Array.isArray(block.tags) ? block.tags.map((tag, tagIndex) => ({
+                    id: Number.isFinite(Number(tag.id)) ? Number(tag.id) : Date.now() + blockIndex + (tagIndex / 1000),
+                    text: normalizeTagName(tag.text),
+                    weight: Math.min(10, Math.max(1, Number.parseInt(tag.weight, 10) || 1)),
+                    cat: Number.parseInt(tag.cat, 10) || 0
+                })).filter(tag => tag.text) : []
+            }));
+        }
+
+        function escapeHTML(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
 
         // DB Setup
         const DB_NAME = 'PromptStudioDB';
@@ -712,10 +905,12 @@
                     if (countRequest.result > 0) {
                         const getAll = store.getAll();
                         getAll.onsuccess = () => {
-                            tagDB = getAll.result.sort((a, b) => b.c - a.c);
+                            const normalizedMap = new Map();
+                            getAll.result.map(normalizeTagRecord).filter(tag => tag.t).forEach(tag => normalizedMap.set(tag.t, tag));
+                            tagDB = Array.from(normalizedMap.values()).sort((a, b) => b.c - a.c);
                             updateTagCountDisplay();
                             clearDbBtn.classList.remove('hidden');
-                            clearDbBtn.innerText = `清除快取 (${formatCount(tagDB.length)})`;
+                            clearDbBtn.innerText = `還原預設 (${formatCount(tagDB.length)})`;
                             resolve(true);
                         };
                     } else {
@@ -733,6 +928,19 @@
                 newTagsArray.forEach(tag => store.put(tag));
                 transaction.oncomplete = () => resolve();
                 transaction.onerror = (e) => reject(e);
+            });
+        }
+
+        async function replaceTagsInDB(newTagsArray) {
+            if (!db) await initDB();
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([STORE_NAME], 'readwrite');
+                const store = transaction.objectStore(STORE_NAME);
+                store.clear();
+                newTagsArray.forEach(tag => store.put(normalizeTagRecord(tag)));
+                transaction.oncomplete = () => resolve();
+                transaction.onerror = (e) => reject(e);
+                transaction.onabort = (e) => reject(e);
             });
         }
         
@@ -785,7 +993,7 @@
 
             el.innerHTML = `
                 ${icon}
-                <div class="flex-1 leading-relaxed">${message.replace(/\n/g, '<br>')}</div>
+                <div class="flex-1 leading-relaxed">${escapeHTML(message).replace(/\n/g, '<br>')}</div>
                 <button class="text-zinc-500 hover:text-white transition shrink-0" onclick="this.parentElement.classList.add('hiding'); setTimeout(() => this.parentElement.remove(), 300);">
                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
@@ -803,66 +1011,81 @@
         }
 
         async function clearDatabase() {
-            if(!confirm("確定要清除快取資料嗎？\n這將刪除所有匯入的 Tag，還原至初始狀態。")) return;
-            
-            if (!db) await initDB();
-            const transaction = db.transaction([STORE_NAME], 'readwrite');
-            const objectStore = transaction.objectStore(STORE_NAME);
-            const request = objectStore.clear();
-
-            request.onsuccess = () => {
+            if(!confirm("確定移除所有匯入及手動修改，並重新載入預設 Tag 資料嗎？")) return;
+            loadingOverlay.classList.add('active');
+            loadingText.innerText = '正在還原預設 Tag 資料...';
+            try {
                 tagDB = [];
-                updateTagCountDisplay();
-                tagCountBadge.innerText = `Built-in: ${tagDB.length} tags`; 
-                clearDbBtn.classList.add('hidden');
-                clearDbBtn.innerText = '';
+                await replaceTagsInDB([]);
+                localStorage.removeItem(TAGS_INITIALIZED_KEY);
+                await loadRemoteCSVFiles();
                 hideSuggestions();
-                showToast("快取已清除！資料已還原為內建預設值。", 'success');
-            };
-
-            request.onerror = (e) => {
+                showToast(`已還原 ${tagDB.length} 個預設 Tags。`, 'success');
+            } catch (e) {
                 console.error("Clear failed:", e);
-                showToast("清除失敗，請查看 Console 錯誤訊息。", 'error');
-            };
+                showToast("還原失敗，原有資料可能未完整變更。", 'error');
+            } finally {
+                loadingOverlay.classList.remove('active');
+            }
         }
 
-        function exportToCSV() {
+        async function renameTagInDB(oldKey, tagObj) {
+            if (!db) await initDB();
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([STORE_NAME], 'readwrite');
+                const store = transaction.objectStore(STORE_NAME);
+                store.delete(oldKey);
+                store.put(normalizeTagRecord(tagObj));
+                transaction.oncomplete = () => resolve();
+                transaction.onerror = (e) => reject(e);
+                transaction.onabort = (e) => reject(e);
+            });
+        }
+
+        function csvEscape(value) {
+            const text = String(value ?? '');
+            return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+        }
+
+        function downloadFile(content, filename, mimeType, includeBom = false) {
+            const blob = new Blob([includeBom ? "\uFEFF" : '', content], { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            link.style.display = 'none';
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 0);
+        }
+
+        function exportDateStamp() {
+            return new Date().toISOString().replace(/[:.]/g, '-');
+        }
+
+        function exportTagsCSV() {
             if (!tagDB || tagDB.length === 0) {
-                showToast("目前沒有任何 Tag 資料可供導出。", 'warning');
+                showToast("目前沒有任何 Tag 資料可供匯出。", 'warning');
                 return;
             }
+            const rows = tagDB.map(item => [item.t, item.cat, item.c, item.a].map(csvEscape).join(','));
+            downloadFile(`tag,category,count,aliases\r\n${rows.join('\r\n')}\r\n`, `weighted-prompt-tags_${exportDateStamp()}.csv`, 'text/csv;charset=utf-8', true);
+            showToast(`已匯出 ${tagDB.length} 個 Tags。`, 'success');
+        }
 
-            loadingOverlay.classList.add('active');
-            loadingText.innerText = "正在建立 CSV 檔案...";
+        function exportWorkspaceJSON() {
+            const payload = { schemaVersion: DATA_SCHEMA_VERSION, type: 'weighted-prompt-studio-workspace', exportedAt: new Date().toISOString(), blocks, blockIdCounter };
+            downloadFile(JSON.stringify(payload, null, 2), `weighted-prompt-workspace_${exportDateStamp()}.json`, 'application/json;charset=utf-8');
+        }
 
-            setTimeout(() => {
-                try {
-                    let csvContent = "tag,category,count,aliases\n";
-                    tagDB.forEach(item => {
-                        let safeAlias = item.a || "";
-                        if (safeAlias.includes(",") || safeAlias.includes('"')) {
-                            safeAlias = `"${safeAlias.replace(/"/g, '""')}"`;
-                        }
-                        csvContent += `${item.t},${item.cat || 0},${item.c || 0},${safeAlias}\n`;
-                    });
-                    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
-                    const url = URL.createObjectURL(blob);
-                    const link = document.createElement("a");
-                    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-                    link.setAttribute("href", url);
-                    link.setAttribute("download", `tags_export_${dateStr}.csv`);
-                    link.style.visibility = 'hidden';
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    URL.revokeObjectURL(url);
-                } catch (e) {
-                    console.error("Export failed:", e);
-                    showToast("導出失敗，請查看 Console。", 'error');
-                } finally {
-                    loadingOverlay.classList.remove('active');
-                }
-            }, 100);
+        function exportFullBackupJSON() {
+            const payload = { schemaVersion: DATA_SCHEMA_VERSION, type: 'weighted-prompt-studio-backup', exportedAt: new Date().toISOString(), tags: tagDB, workspace: { blocks, blockIdCounter } };
+            downloadFile(JSON.stringify(payload, null, 2), `weighted-prompt-backup_${exportDateStamp()}.json`, 'application/json;charset=utf-8');
+        }
+
+        function exportSyntaxTXT() {
+            downloadFile(generateSyntax(), `weighted-prompt_${exportDateStamp()}.txt`, 'text/plain;charset=utf-8', true);
         }
 
         function saveBlocksToLocalStorage() {
@@ -882,8 +1105,7 @@
                 try {
                     const data = JSON.parse(dataStr);
                     if (data.blocks && Array.isArray(data.blocks)) {
-                        blocks = data.blocks;
-                        blocks.forEach(b => { if(b.enabled === undefined) b.enabled = true; });
+                        blocks = normalizeBlocks(data.blocks);
                         blockIdCounter = data.blockIdCounter || 100;
                         renderBlocks();
                         updatePreview();
@@ -910,7 +1132,7 @@
                         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
                         return res.text();
                     })
-                    .then(text => parseCSVContent(text))
+                    .then(text => parseCSVContent(text, url).tags)
                     .catch(e => {
                         console.error(`Failed to load ${url}:`, e);
                         return [];
@@ -920,17 +1142,19 @@
             try {
                 const results = await Promise.all(promises);
                 const allRemoteTags = results.flat();
-                
-                if (allRemoteTags.length > 0) {
-                    const tagMap = new Map();
-                    tagDB.forEach(t => tagMap.set(t.t, t));
-                    allRemoteTags.forEach(t => tagMap.set(t.t, t));
-                    tagDB = Array.from(tagMap.values()).sort((a, b) => b.c - a.c);
-                    await saveTagsToDB(tagDB);
-                    updateTagCountDisplay();
-                    clearDbBtn.classList.remove('hidden');
-                    clearDbBtn.innerText = `清除快取 (${formatCount(tagDB.length)})`;
-                }
+                const sourceTags = allRemoteTags.length > 0
+                    ? allRemoteTags
+                    : rawTagData.map(([t, cat, c, a]) => normalizeTagRecord({ t, cat, c, a }));
+                const tagMap = new Map();
+                tagDB.forEach(t => tagMap.set(t.t, t));
+                sourceTags.forEach(t => tagMap.set(t.t, t));
+                tagDB = Array.from(tagMap.values()).sort((a, b) => b.c - a.c);
+                await replaceTagsInDB(tagDB);
+                localStorage.setItem(TAGS_INITIALIZED_KEY, 'true');
+                localStorage.setItem(TAGS_NORMALIZED_KEY, 'true');
+                updateTagCountDisplay();
+                clearDbBtn.classList.remove('hidden');
+                clearDbBtn.innerText = `還原預設 (${formatCount(tagDB.length)})`;
             } catch (err) {
                 console.error("Error processing remote CSVs:", err);
             } finally {
@@ -942,12 +1166,19 @@
         async function init() {
             try {
                 await initDB();
-                const hasCustomData = await loadTagsFromDB();
-                if (!hasCustomData) {
+                const hasStoredData = await loadTagsFromDB();
+                const wasInitialized = localStorage.getItem(TAGS_INITIALIZED_KEY) === 'true';
+                if (hasStoredData) {
+                    if (localStorage.getItem(TAGS_NORMALIZED_KEY) !== 'true') {
+                        await replaceTagsInDB(tagDB);
+                        localStorage.setItem(TAGS_NORMALIZED_KEY, 'true');
+                    }
+                    localStorage.setItem(TAGS_INITIALIZED_KEY, 'true');
+                } else if (!wasInitialized) {
+                    await loadRemoteCSVFiles();
+                } else {
                     updateTagCountDisplay();
-                    tagCountBadge.innerText = `Built-in: ${tagDB.length} tags`;
                 }
-                await loadRemoteCSVFiles();
             } catch (e) { console.error("DB Init failed:", e); updateTagCountDisplay(); }
 
             const loaded = loadBlocksFromLocalStorage();
@@ -967,70 +1198,269 @@
         window.addEventListener('dragleave', (e) => { if (e.relatedTarget === null || e.clientX === 0 || e.clientY === 0) dragOverlay.classList.remove('active'); });
         window.addEventListener('drop', (e) => { e.preventDefault(); dragOverlay.classList.remove('active'); if (e.dataTransfer.files.length > 0) loadTagsFromCSV(e.dataTransfer.files); });
 
-        async function loadTagsFromCSV(files) {
-            if (!files || files.length === 0) return;
-            loadingOverlay.classList.add('active');
-            loadingText.innerText = "正在讀取檔案...";
-
-            const tagMap = new Map();
-            tagDB.forEach(item => tagMap.set(item.t, item));
-            
-            let fileCount = 0;
-            const promises = Array.from(files).map(file => {
-                if (!file.name.toLowerCase().endsWith('.csv')) return Promise.resolve();
-                fileCount++;
-                return new Promise((resolve) => {
-                    const reader = new FileReader();
-                    reader.onload = function(e) {
-                        const newTags = parseCSVContent(e.target.result);
-                        newTags.forEach(tag => tagMap.set(tag.t, tag));
-                        resolve();
-                    };
-                    reader.readAsText(file);
-                });
-            });
-
-            await Promise.all(promises);
-
-            if (fileCount === 0) { loadingOverlay.classList.remove('active'); showToast("未偵測到有效的 .csv", 'warning'); return; }
-
-            tagDB = Array.from(tagMap.values()).sort((a, b) => b.c - a.c);
-            
-            setTimeout(async () => {
-                try {
-                    await saveTagsToDB(tagDB);
-                    loadingOverlay.classList.remove('active');
-                    showToast(`成功匯入！\n共 ${tagDB.length} 個標籤已儲存。`, 'success');
-                    updateTagCountDisplay();
-                    clearDbBtn.classList.remove('hidden');
-                    clearDbBtn.innerText = `清除快取 (${formatCount(tagDB.length)})`;
-                } catch (e) {
-                    loadingOverlay.classList.remove('active');
-                    console.error(e);
-                    showToast("儲存錯誤，但本次操作仍有效。", 'warning');
-                    updateTagCountDisplay();
-                }
-            }, 100);
+        function openDataModal(tab = 'import') {
+            dataModal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+            switchDataTab(tab);
         }
 
-        function parseCSVContent(text) {
-            const lines = text.split('\n');
-            const parsedTags = [];
-            const startIndex = lines[0].trim().startsWith('tag,') ? 1 : 0;
-            for (let i = startIndex; i < lines.length; i++) {
-                const line = lines[i].trim();
-                if (!line) continue;
-                const parts = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-                if (parts.length >= 2) {
-                    const tag = parts[0];
-                    const cat = parseInt(parts[1]) || 0; 
-                    const count = parseInt(parts[2]) || 0;
-                    let alias = parts[3] || '';
-                    if (alias.startsWith('"') && alias.endsWith('"')) alias = alias.slice(1, -1);
-                    parsedTags.push({ t: tag, cat: cat, c: count, a: alias });
+        function closeDataModal() {
+            dataModal.classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        function switchDataTab(tab) {
+            const importing = tab === 'import';
+            dataImportPanel.classList.toggle('hidden', !importing);
+            dataExportPanel.classList.toggle('hidden', importing);
+            dataImportTab.className = `flex-1 py-3 text-xs font-bold border-b-2 ${importing ? 'text-blue-400 border-blue-500' : 'text-zinc-500 border-transparent'}`;
+            dataExportTab.className = `flex-1 py-3 text-xs font-bold border-b-2 ${importing ? 'text-zinc-500 border-transparent' : 'text-blue-400 border-blue-500'}`;
+        }
+
+        async function loadTagsFromCSV(files) {
+            openDataModal('import');
+            return prepareImportFiles(files);
+        }
+
+        function readFileAsText(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(String(reader.result ?? ''));
+                reader.onerror = () => reject(reader.error || new Error(`無法讀取 ${file.name}`));
+                reader.readAsText(file);
+            });
+        }
+
+        function parseCSVRows(text) {
+            const rows = [];
+            let row = [];
+            let field = '';
+            let quoted = false;
+            const input = String(text ?? '').replace(/^\uFEFF/, '');
+            for (let i = 0; i < input.length; i++) {
+                const char = input[i];
+                if (quoted) {
+                    if (char === '"' && input[i + 1] === '"') { field += '"'; i++; }
+                    else if (char === '"') quoted = false;
+                    else field += char;
+                } else if (char === '"' && field.length === 0) {
+                    quoted = true;
+                } else if (char === ',') {
+                    row.push(field); field = '';
+                } else if (char === '\n' || char === '\r') {
+                    if (char === '\r' && input[i + 1] === '\n') i++;
+                    row.push(field); field = '';
+                    if (row.some(cell => cell.trim() !== '')) rows.push(row);
+                    row = [];
+                } else {
+                    field += char;
                 }
             }
-            return parsedTags;
+            if (field.length > 0 || row.length > 0) {
+                row.push(field);
+                if (row.some(cell => cell.trim() !== '')) rows.push(row);
+            }
+            return { rows, unclosedQuote: quoted };
+        }
+
+        function parseCSVContent(text, sourceName = 'CSV') {
+            const { rows, unclosedQuote } = parseCSVRows(text);
+            const tags = [];
+            const issues = [];
+            if (rows.length === 0) return { tags, issues: [`${sourceName}: 檔案沒有資料`] };
+            const header = rows[0].map(cell => cell.trim().toLowerCase());
+            const hasHeader = header.includes('tag');
+            const indexOf = (names, fallback) => {
+                const index = header.findIndex(cell => names.includes(cell));
+                return hasHeader && index >= 0 ? index : fallback;
+            };
+            const tagIndex = indexOf(['tag', 'name', 'key'], 0);
+            const categoryIndex = indexOf(['category', 'cat'], 1);
+            const countIndex = indexOf(['count', 'usage_count'], 2);
+            const aliasIndex = indexOf(['aliases', 'alias'], 3);
+            rows.slice(hasHeader ? 1 : 0).forEach((columns, rowIndex) => {
+                const displayRow = rowIndex + (hasHeader ? 2 : 1);
+                const rawCategory = String(columns[categoryIndex] ?? '').trim();
+                const rawCount = String(columns[countIndex] ?? '').trim();
+                const tag = normalizeTagRecord({ t: columns[tagIndex], cat: columns[categoryIndex], c: columns[countIndex], a: columns[aliasIndex] });
+                if (!tag.t) issues.push(`${sourceName}: 第 ${displayRow} 行缺少 Tag 名稱`);
+                else tags.push(tag);
+                if (rawCategory && !Number.isFinite(Number(rawCategory))) issues.push(`${sourceName}: 第 ${displayRow} 行 category 無效，已改為 0`);
+                if (rawCount && (!Number.isFinite(Number(rawCount)) || Number(rawCount) < 0)) issues.push(`${sourceName}: 第 ${displayRow} 行 count 無效，已改為 0`);
+            });
+            if (unclosedQuote) issues.push(`${sourceName}: 最後一個引用欄位沒有閉合引號`);
+            return { tags, issues };
+        }
+
+        function statCard(label, value, color = 'text-white') {
+            return `<div class="bg-zinc-900 border border-zinc-700 rounded p-3"><span class="block text-[10px] text-zinc-500">${escapeHTML(label)}</span><span class="block text-lg font-bold ${color}">${escapeHTML(value)}</span></div>`;
+        }
+
+        async function prepareImportFiles(files) {
+            if (!files || files.length === 0) return;
+            loadingOverlay.classList.add('active');
+            loadingText.innerText = '正在分析匯入檔案...';
+            const prepared = { tags: [], workspace: null, syntax: null, replaceTags: false, issues: [], fileCount: 0 };
+            try {
+                for (const file of Array.from(files)) {
+                    const name = file.name.toLowerCase();
+                    if (!/\.(csv|json|txt)$/.test(name)) {
+                        prepared.issues.push(`${file.name}: 不支援的檔案類型`);
+                        continue;
+                    }
+                    prepared.fileCount++;
+                    const text = await readFileAsText(file);
+                    if (name.endsWith('.csv')) {
+                        const parsed = parseCSVContent(text, file.name);
+                        prepared.tags.push(...parsed.tags);
+                        prepared.issues.push(...parsed.issues);
+                    } else if (name.endsWith('.txt')) {
+                        prepared.syntax = text.trim();
+                    } else {
+                        try {
+                            const json = JSON.parse(text);
+                            if (json.type === 'weighted-prompt-studio-backup') {
+                                prepared.tags = Array.isArray(json.tags) ? json.tags.map(normalizeTagRecord).filter(tag => tag.t) : [];
+                                prepared.workspace = json.workspace || null;
+                                prepared.replaceTags = true;
+                            } else if (json.type === 'weighted-prompt-studio-workspace' || Array.isArray(json.blocks)) {
+                                prepared.workspace = json;
+                            } else if (Array.isArray(json)) {
+                                prepared.tags.push(...json.map(normalizeTagRecord).filter(tag => tag.t));
+                            } else {
+                                prepared.issues.push(`${file.name}: 無法識別的 JSON 格式`);
+                            }
+                        } catch (error) {
+                            prepared.issues.push(`${file.name}: JSON 解析失敗 (${error.message})`);
+                        }
+                    }
+                }
+                const importedMap = new Map();
+                let duplicateCount = 0;
+                prepared.tags.forEach(tag => {
+                    const normalized = normalizeTagRecord(tag);
+                    if (!normalized.t) return;
+                    if (importedMap.has(normalized.t)) duplicateCount++;
+                    importedMap.set(normalized.t, normalized);
+                });
+                prepared.tags = Array.from(importedMap.values());
+                const existingKeys = new Set(tagDB.map(tag => tag.t));
+                const conflictCount = prepared.tags.filter(tag => existingKeys.has(tag.t)).length;
+                const newCount = prepared.tags.length - conflictCount;
+                const hasPayload = prepared.tags.length > 0 || prepared.workspace || prepared.syntax !== null || prepared.replaceTags;
+                if (duplicateCount) prepared.issues.push(`匯入檔案內有 ${duplicateCount} 個重複 Tag，已按檔案選取次序保留最後一筆。`);
+                if (!hasPayload) prepared.issues.push('沒有找到可匯入的有效資料。');
+                pendingImport = prepared;
+                importStats.innerHTML = [
+                    statCard('檔案', prepared.fileCount),
+                    statCard('新 Tags', newCount, 'text-green-400'),
+                    statCard('同名 Tags', conflictCount, 'text-amber-400'),
+                    statCard('Workspace', prepared.workspace || prepared.syntax !== null ? '有' : '無', 'text-blue-400')
+                ].join('');
+                importWarnings.textContent = prepared.issues.slice(0, 20).join('\n');
+                importWarnings.classList.toggle('hidden', prepared.issues.length === 0);
+                conflictOptions.classList.toggle('hidden', prepared.tags.length === 0 || prepared.replaceTags);
+                confirmImportBtn.innerText = prepared.replaceTags ? '確認完整還原' : '確認匯入';
+                confirmImportBtn.classList.remove('hidden');
+                confirmImportBtn.disabled = !hasPayload;
+                confirmImportBtn.classList.toggle('opacity-40', !hasPayload);
+                confirmImportBtn.classList.toggle('cursor-not-allowed', !hasPayload);
+                undoImportBtn.classList.toggle('hidden', !lastImportBackup);
+                importPreviewEmpty.classList.add('hidden');
+                importPreview.classList.remove('hidden');
+            } catch (error) {
+                console.error(error);
+                pendingImport = null;
+                showToast(`檔案分析失敗: ${error.message}`, 'error');
+            } finally {
+                loadingOverlay.classList.remove('active');
+                dataFileInput.value = '';
+            }
+        }
+
+        function mergeAliases(first, second) {
+            return Array.from(new Set(`${first || ''},${second || ''}`.split(',').map(value => value.trim()).filter(Boolean))).join(',');
+        }
+
+        async function confirmPreparedImport() {
+            if (!pendingImport) return;
+            if (pendingImport.replaceTags && !confirm('完整還原會取代現有 Tags 與 Workspace，確定繼續嗎？')) return;
+            loadingOverlay.classList.add('active');
+            loadingText.innerText = '正在寫入資料...';
+            lastImportBackup = { tags: tagDB.map(tag => ({ ...tag })), blocks: JSON.parse(JSON.stringify(blocks)), blockIdCounter };
+            try {
+                if (pendingImport.tags.length > 0 || pendingImport.replaceTags) {
+                    if (pendingImport.replaceTags) {
+                        tagDB = pendingImport.tags.map(normalizeTagRecord).filter(tag => tag.t);
+                    } else {
+                        const mode = document.getElementById('importConflictMode').value;
+                        const map = new Map(tagDB.map(tag => [tag.t, { ...tag }]));
+                        pendingImport.tags.forEach(incoming => {
+                            const existing = map.get(incoming.t);
+                            if (!existing || mode === 'overwrite') map.set(incoming.t, incoming);
+                            else if (mode === 'merge') map.set(incoming.t, { t: incoming.t, cat: incoming.cat, c: Math.max(existing.c, incoming.c), a: mergeAliases(existing.a, incoming.a) });
+                        });
+                        tagDB = Array.from(map.values());
+                    }
+                    tagDB.sort((a, b) => b.c - a.c);
+                    await replaceTagsInDB(tagDB);
+                    localStorage.setItem(TAGS_INITIALIZED_KEY, 'true');
+                    localStorage.setItem(TAGS_NORMALIZED_KEY, 'true');
+                }
+                if (pendingImport.workspace) {
+                    const workspace = pendingImport.workspace.workspace || pendingImport.workspace;
+                    blocks = normalizeBlocks(workspace.blocks);
+                    blockIdCounter = Number(workspace.blockIdCounter) || Math.max(0, ...blocks.map(block => Number(block.id) || 0));
+                    renderBlocks(); updatePreview(); saveBlocksToLocalStorage();
+                    if (currentTab === 'charts') renderCharts();
+                } else if (pendingImport.syntax !== null) {
+                    syntaxPreview.value = pendingImport.syntax;
+                    applySyntax();
+                }
+                updateTagCountDisplay();
+                clearDbBtn.classList.toggle('hidden', tagDB.length === 0);
+                clearDbBtn.innerText = tagDB.length ? `還原預設 (${formatCount(tagDB.length)})` : '';
+                const importedCount = pendingImport.tags.length;
+                pendingImport = null;
+                importStats.innerHTML = statCard('完成', `${importedCount} Tags`, 'text-green-400');
+                importWarnings.classList.add('hidden');
+                conflictOptions.classList.add('hidden');
+                confirmImportBtn.classList.add('hidden');
+                undoImportBtn.classList.remove('hidden');
+                showToast('資料匯入完成。', 'success');
+            } catch (error) {
+                console.error(error);
+                showToast(`匯入失敗: ${error.message}`, 'error');
+            } finally {
+                loadingOverlay.classList.remove('active');
+            }
+        }
+
+        async function undoLastImport() {
+            if (!lastImportBackup) return;
+            loadingOverlay.classList.add('active');
+            loadingText.innerText = '正在撤銷上次匯入...';
+            try {
+                tagDB = lastImportBackup.tags;
+                blocks = lastImportBackup.blocks;
+                blockIdCounter = lastImportBackup.blockIdCounter;
+                await replaceTagsInDB(tagDB);
+                saveBlocksToLocalStorage();
+                renderBlocks(); updatePreview(); updateTagCountDisplay();
+                if (currentTab === 'charts') renderCharts();
+                lastImportBackup = null;
+                undoImportBtn.classList.add('hidden');
+                showToast('已撤銷上次匯入。', 'success');
+            } finally {
+                loadingOverlay.classList.remove('active');
+            }
+        }
+
+        function clearImportPreview() {
+            pendingImport = null;
+            importPreview.classList.add('hidden');
+            importPreviewEmpty.classList.remove('hidden');
+            dataFileInput.value = '';
         }
 
         function updateTagCountDisplay() { tagCountBadge.innerText = `${tagDB.length} tags loaded`; tagCountBadge.classList.remove('hidden'); }
@@ -1083,6 +1513,7 @@
         function addTagToBlock(blockId, text = "", weight = 1) {
             const block = blocks.find(b => b.id === blockId);
             if (!block) return;
+            text = normalizeTagName(text);
             const cat = getTagCategory(text);
             block.tags.push({ id: Date.now() + Math.random(), text: text, weight: weight, cat: cat });
             renderBlocks(); updatePreview(); saveBlocksToLocalStorage();
@@ -1124,12 +1555,14 @@
                     inputEl.style.setProperty('--fill-color', color);
                 }
             }
-            tag[field] = value;
-            
             if (field === 'text') {
+                value = normalizeTagName(value);
+                const inputEl = document.querySelector(`[data-input-id="text-${tagId}"]`);
+                if (inputEl && inputEl.value !== value) inputEl.value = value;
                 tag.cat = getTagCategory(value);
                 // No longer applying category class to text input
             }
+            tag[field] = value;
             
             updateProbabilitiesDisplay(blockId);
             updatePreview();
@@ -1213,7 +1646,7 @@
                         <div class="drag-handle text-zinc-600 hover:text-zinc-300 cursor-grab px-1 shrink-0 select-none"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"></path></svg></div>
                         <div class="flex-1 flex flex-col gap-1 min-w-0">
                             <div class="flex items-center gap-2">
-                                <input type="text" value="${tag.text}" class="flex-1 bg-transparent border-none p-0 text-xs font-mono placeholder-zinc-600 focus:ring-0 min-w-0 text-zinc-200" placeholder="Tag Name" data-input-id="text-${tag.id}" data-type="tag-input" autocomplete="off" onchange="updateTag(${block.id}, ${tag.id}, 'text', this.value)">
+                                <input type="text" value="${escapeHTML(tag.text)}" class="flex-1 bg-transparent border-none p-0 text-xs font-mono placeholder-zinc-600 focus:ring-0 min-w-0 text-zinc-200" placeholder="Tag Name" data-input-id="text-${tag.id}" data-type="tag-input" autocomplete="off" onchange="updateTag(${block.id}, ${tag.id}, 'text', this.value)">
                                 <span class="text-sm font-bold font-mono text-blue-400 w-12 text-right prob-display shrink-0">${prob}%</span>
                             </div>
                             <div class="flex items-center gap-2 mt-0.5">
@@ -1443,14 +1876,14 @@
                 const div = document.createElement('div');
                 div.className = 'suggestion-item';
                 
-                let displayTag = item.t.replace(highlightRegex, '<span class="match-highlight">$1</span>');
+                let displayTag = escapeHTML(item.t).replace(highlightRegex, '<span class="match-highlight">$1</span>');
                 const catClass = `tag-cat-${item.cat !== undefined ? item.cat : 0}`;
                 
                 div.innerHTML = `
                     <div class="suggestion-tag ${catClass}">${displayTag}</div>
                     <div class="suggestion-meta">
                         <span>${formatCount(item.c)}</span>
-                        <span class="truncate max-w-[120px] ml-2" title="${item.a}">${item.a}</span>
+                        <span class="truncate max-w-[120px] ml-2" title="${escapeHTML(item.a)}">${escapeHTML(item.a)}</span>
                     </div>
                 `;
                 div.onclick = () => applySuggestion(item.t);
@@ -1548,21 +1981,23 @@
                         }
                         
                         if (tagName.trim()) {
+                            tagName = normalizeTagName(tagName);
                             blockTags.push({
                                  id: Date.now() + Math.random(),
-                                 text: tagName.trim(),
+                                  text: tagName,
                                  weight: weight,
-                                 cat: getTagCategory(tagName.trim())
+                                  cat: getTagCategory(tagName)
                             });
                         }
                     });
                 } else {
                     // Simple text: tag1 (Treat as weight 1)
+                    const normalizedMatch = normalizeTagName(matchStr);
                     blockTags.push({
                           id: Date.now() + Math.random(),
-                          text: matchStr,
+                          text: normalizedMatch,
                           weight: 1,
-                          cat: getTagCategory(matchStr)
+                          cat: getTagCategory(normalizedMatch)
                     });
                 }
                 
@@ -1686,6 +2121,41 @@
             document.body.style.overflow = 'hidden'; // prevent bg scrolling
         }
 
+        async function setAllTagsToMeta() {
+            if (tagDB.length === 0) {
+                showToast('目前沒有 Tags 可更新。', 'warning');
+                return;
+            }
+            if (!confirm(`確定將全部 ${tagDB.length} 個 Tags 設為 Meta（高品質）嗎？\nCategory 將統一改為 5。`)) return;
+
+            const previousTagDB = tagDB;
+            const previousBlockCategories = blocks.map(block => block.tags.map(tag => tag.cat));
+            loadingOverlay.classList.add('active');
+            loadingText.innerText = '正在將全部 Tags 設為 Meta...';
+            try {
+                tagDB = tagDB.map(tag => ({ ...tag, cat: 5 }));
+                blocks.forEach(block => block.tags.forEach(tag => { tag.cat = 5; }));
+                await replaceTagsInDB(tagDB);
+                saveBlocksToLocalStorage();
+                localStorage.setItem(TAGS_INITIALIZED_KEY, 'true');
+                localStorage.setItem(TAGS_NORMALIZED_KEY, 'true');
+                if (editingTagOriginalKey !== null) editTagCat.value = '5';
+                renderManagerList(managerSearch.value);
+                renderBlocks();
+                if (currentTab === 'charts') renderCharts();
+                showToast(`已將 ${tagDB.length} 個 Tags 設為 Meta（高品質）。`, 'success');
+            } catch (error) {
+                tagDB = previousTagDB;
+                blocks.forEach((block, blockIndex) => block.tags.forEach((tag, tagIndex) => {
+                    tag.cat = previousBlockCategories[blockIndex]?.[tagIndex] ?? 0;
+                }));
+                console.error(error);
+                showToast(`批次更新失敗: ${error.message}`, 'error');
+            } finally {
+                loadingOverlay.classList.remove('active');
+            }
+        }
+
         function closeTagManager() {
             tagManagerModal.classList.remove('active');
             document.body.style.overflow = '';
@@ -1704,7 +2174,18 @@
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && tagManagerModal.classList.contains('active')) {
                 closeTagManager();
+            } else if (e.key === 'Escape' && dataModal.classList.contains('active')) {
+                closeDataModal();
             }
+        });
+
+        blocksContainer.addEventListener('focusout', function(e) {
+            if (e.target.dataset.type !== 'tag-input') return;
+            const card = e.target.closest('.block-card');
+            const tagId = Number(String(e.target.dataset.inputId || '').replace('text-', ''));
+            if (!card || !Number.isFinite(tagId)) return;
+            updateTag(Number(card.dataset.id), tagId, 'text', e.target.value);
+            hideSuggestions();
         });
 
         function renderManagerList(query) {
@@ -1739,8 +2220,8 @@
                 
                 el.innerHTML = `
                     <div class="flex flex-col truncate mr-2">
-                        <span class="font-bold ${catClass}">${tag.t}</span>
-                        <span class="text-zinc-500 text-[10px] truncate">${tag.a || '-'}</span>
+                        <span class="font-bold ${catClass}">${escapeHTML(tag.t)}</span>
+                        <span class="text-zinc-500 text-[10px] truncate">${escapeHTML(tag.a || '-')}</span>
                     </div>
                     <span class="text-zinc-600 font-mono text-[10px] bg-zinc-800 px-1 rounded">${formatCount(tag.c)}</span>
                 `;
@@ -1793,12 +2274,15 @@
         }
 
         async function saveManagerChanges() {
-            const newKey = editTagName.value.trim();
+            const newKey = normalizeTagName(editTagName.value);
             if (!newKey) { showToast("Tag 名稱不能為空", 'error'); return; }
             
             const newCat = parseInt(editTagCat.value);
             const newCount = parseInt(editTagCount.value);
             const newAlias = editTagAlias.value.trim();
+
+            editTagName.value = newKey;
+            if (!Number.isFinite(newCount) || newCount < 0) { showToast("使用計數必須是 0 或正整數", 'error'); return; }
             
             const newTagObj = { t: newKey, cat: newCat, c: newCount, a: newAlias };
             
@@ -1831,10 +2315,8 @@
                          if(!confirm(`確定將 Tag 名稱從 "${editingTagOriginalKey}" 變更為 "${newKey}" 嗎？\n(這將刪除舊 Tag 並建立新 Tag)`)) return;
                     }
                     
-                    // Delete Old
-                    await deleteTagFromDB(editingTagOriginalKey);
-                    // Add New
-                    await updateSingleTagInDB(newTagObj);
+                    // Rename atomically so a failed write cannot leave the old Tag deleted.
+                    await renameTagInDB(editingTagOriginalKey, newTagObj);
                     
                     // Update Array: Remove old, add new
                     tagDB = tagDB.filter(t => t.t !== editingTagOriginalKey && t.t !== newKey);

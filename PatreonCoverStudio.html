@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Patreon Cover Studio — Editorial Story</title>
+  <title>DLsite Cover Studio — Editorial Story</title>
   <style>
     :root {
       color-scheme: dark;
@@ -164,7 +164,7 @@
     .file-grid {
       display: grid;
       gap: 8px;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(3, 1fr);
     }
     .file-button input { display: none; }
     .file-note {
@@ -274,27 +274,28 @@
   <main class="app-shell">
     <aside class="sidebar" aria-label="封面設定">
       <header class="brand">
-        <div class="eyebrow">Editorial Story / Template 01</div>
-        <h1>Patreon Cover Studio</h1>
-        <p>以主圖、模糊預告、巨型字與斜切線製作漫畫宣傳封面。</p>
+        <div class="eyebrow">Editorial Story / DLsite 01</div>
+        <h1>DLsite Cover Studio</h1>
+        <p>以主圖、模糊預告、局部特寫與斜切線製作 DLsite 商品圖片。</p>
       </header>
 
       <div class="controls">
         <section class="control-section">
           <h2 class="section-title">圖片</h2>
           <div class="file-grid">
-            <label class="file-button">上載主圖<input id="main-image-input" type="file" accept="image/*"></label>
-            <label class="file-button">上載預告圖<input id="teaser-image-input" type="file" accept="image/*"></label>
+            <label class="file-button">主圖<input id="main-image-input" type="file" accept="image/*"></label>
+            <label class="file-button">預告圖<input id="teaser-image-input" type="file" accept="image/*"></label>
+            <label class="file-button">特寫圖<input id="detail-image-input" type="file" accept="image/*"></label>
           </div>
-          <p class="file-note">未上載預告圖時會自動重用主圖。可直接拖曳右邊封面調整構圖焦點。</p>
+          <p class="file-note">預告圖放右側並模糊處理；特寫圖放左側窄框。未上載時會自動重用主圖。</p>
         </section>
 
         <section class="control-section">
           <h2 class="section-title">輸出比例</h2>
           <div class="ratio-group" role="group" aria-label="選擇輸出比例">
-            <button class="ratio-button" type="button" data-ratio="16:9" aria-pressed="true">16:9</button>
+            <button class="ratio-button" type="button" data-ratio="4:3" aria-pressed="true">4:3 主圖</button>
             <button class="ratio-button" type="button" data-ratio="1:1" aria-pressed="false">1:1</button>
-            <button class="ratio-button" type="button" data-ratio="4:5" aria-pressed="false">4:5</button>
+            <button class="ratio-button" type="button" data-ratio="16:9" aria-pressed="false">16:9</button>
           </div>
         </section>
 
@@ -310,15 +311,15 @@
           </label>
           <label class="field">
             <span class="field-head">版本標籤</span>
-            <input type="text" value="PATREON EDITION · 01" maxlength="32" data-key="edition">
+            <input type="text" value="DLsite 販売版 · 01" maxlength="32" data-key="edition">
           </label>
           <label class="field">
             <span class="field-head">宣傳句</span>
-            <input type="text" value="完全版漫畫" maxlength="24" data-key="salesLine">
+            <input type="text" value="本編全" maxlength="24" data-key="salesLine">
           </label>
           <label class="field">
             <span class="field-head">附加內容</span>
-            <input type="text" value="頁 · 4K BONUS ART 3枚" maxlength="36" data-key="bonusLine">
+            <input type="text" value="ページ · 特典イラスト3枚収録" maxlength="36" data-key="bonusLine">
           </label>
           <label class="field">
             <span class="field-head">突出數字</span>
@@ -349,6 +350,38 @@
             <input type="range" min="0" max="36" value="16" data-key="teaserBlur">
           </label>
           <label class="field">
+            <span class="field-head">預告圖縮放 <output data-output="teaserZoom">126%</output></span>
+            <input type="range" min="100" max="220" value="126" data-key="teaserZoom">
+          </label>
+          <label class="field">
+            <span class="field-head">預告水平焦點 <output data-output="teaserPositionX">50%</output></span>
+            <input type="range" min="0" max="100" value="50" data-key="teaserPositionX">
+          </label>
+          <label class="field">
+            <span class="field-head">預告垂直焦點 <output data-output="teaserPositionY">35%</output></span>
+            <input type="range" min="0" max="100" value="35" data-key="teaserPositionY">
+          </label>
+          <label class="field">
+            <span class="field-head">預告透明度 <output data-output="teaserOpacity">76%</output></span>
+            <input type="range" min="10" max="100" value="76" data-key="teaserOpacity">
+          </label>
+          <label class="field">
+            <span class="field-head">特寫圖縮放 <output data-output="detailZoom">125%</output></span>
+            <input type="range" min="100" max="220" value="125" data-key="detailZoom">
+          </label>
+          <label class="field">
+            <span class="field-head">特寫水平焦點 <output data-output="detailPositionX">50%</output></span>
+            <input type="range" min="0" max="100" value="50" data-key="detailPositionX">
+          </label>
+          <label class="field">
+            <span class="field-head">特寫垂直焦點 <output data-output="detailPositionY">35%</output></span>
+            <input type="range" min="0" max="100" value="35" data-key="detailPositionY">
+          </label>
+          <label class="field">
+            <span class="field-head">特寫透明度 <output data-output="detailOpacity">42%</output></span>
+            <input type="range" min="10" max="100" value="42" data-key="detailOpacity">
+          </label>
+          <label class="field">
             <span class="field-head">黑色遮罩 <output data-output="darkness">42%</output></span>
             <input type="range" min="0" max="80" value="42" data-key="darkness">
           </label>
@@ -364,15 +397,15 @@
       <div class="workspace-bar">
         <div>
           <div class="eyebrow">Live Preview</div>
-          <div class="workspace-status" id="canvas-status">1600 × 900 px · Patreon Post Feed</div>
+          <div class="workspace-status" id="canvas-status">560 × 420 px · DLsite メイン画像</div>
         </div>
         <div class="workspace-actions">
           <button class="ghost-button" id="reset-button" type="button">重設模板</button>
-          <button class="primary-button" id="download-button" type="button">下載 PNG</button>
+          <button class="primary-button" id="download-button" type="button">下載 JPG</button>
         </div>
       </div>
       <div class="stage-wrap">
-        <canvas id="cover-canvas" width="1600" height="900" aria-label="Patreon 漫畫封面預覽"></canvas>
+        <canvas id="cover-canvas" width="560" height="420" aria-label="DLsite 漫畫商品圖片預覽"></canvas>
         <div class="stage-hint">拖曳圖片調整角色位置</div>
       </div>
     </section>
@@ -386,30 +419,40 @@
       const status = document.getElementById('canvas-status');
       const toast = document.getElementById('toast');
       const defaultState = {
-        ratio: '16:9',
+        ratio: '4:3',
         seriesName: 'VIVIAN',
         mainTitle: '契約',
-        edition: 'PATREON EDITION · 01',
-        salesLine: '完全版漫畫',
-        bonusLine: '頁 · 4K BONUS ART 3枚',
+        edition: 'DLsite 販売版 · 01',
+        salesLine: '本編全',
+        bonusLine: 'ページ · 特典イラスト3枚収録',
         pageCount: '24',
         accent: '#c345df',
         zoom: 106,
         positionX: 50,
         positionY: 35,
         teaserBlur: 16,
+        teaserZoom: 126,
+        teaserPositionX: 50,
+        teaserPositionY: 35,
+        teaserOpacity: 76,
+        detailZoom: 125,
+        detailPositionX: 50,
+        detailPositionY: 35,
+        detailOpacity: 42,
         darkness: 42,
         slashAngle: -11
       };
       const state = { ...defaultState };
       const ratioMap = {
-        '16:9': { width: 1600, height: 900, label: 'Patreon Post Feed' },
-        '1:1': { width: 1200, height: 1200, label: 'Shop / Collection Cover' },
-        '4:5': { width: 1200, height: 1500, label: 'Portrait Promo' }
+        '4:3': { width: 560, height: 420, label: 'DLsite メイン画像' },
+        '1:1': { width: 300, height: 300, label: 'DLsite サムネイル画像' },
+        '16:9': { width: 1600, height: 900, label: '宣伝用ワイド画像' }
       };
       const mainImage = new Image();
       const teaserImage = new Image();
+      const detailImage = new Image();
       let teaserIsCustom = false;
+      let detailIsCustom = false;
       let toastTimer;
       let dragState = null;
 
@@ -451,7 +494,7 @@
         ctx.drawImage(image, drawX, drawY, drawW, drawH);
       }
 
-      function drawPanel(image, points, filter, opacity, zoomOffset = 0, xOffset = 0) {
+      function drawPanel(image, points, filter, opacity, zoomOffset = 0, xOffset = 0, positionX = state.positionX, positionY = state.positionY, absoluteZoom = null) {
         const w = canvas.width;
         const h = canvas.height;
         ctx.save();
@@ -465,9 +508,9 @@
           -h * .02,
           w * 1.04,
           h * 1.04,
-          state.zoom / 100 + zoomOffset,
-          state.positionX,
-          state.positionY
+          absoluteZoom === null ? state.zoom / 100 + zoomOffset : absoluteZoom,
+          positionX,
+          positionY
         );
         ctx.restore();
       }
@@ -535,15 +578,15 @@
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         setFont(Math.max(10, Math.min(w, h) * .015), sans, '700');
-        ctx.fillText('CASE 01', (portrait ? w * .25 : w * .13) / 2, h * .0335);
+        ctx.fillText('SCENE 01', (portrait ? w * .25 : w * .13) / 2, h * .0335);
         ctx.restore();
 
         ctx.fillStyle = 'rgba(255,255,255,.73)';
         ctx.textAlign = 'right';
         ctx.textBaseline = 'bottom';
         setFont(Math.max(9, Math.min(w, h) * .013), sans, '700');
-        ctx.fillText('MEMBERS ONLY', w * .955, h * .705);
-        ctx.fillText('UNLOCK THE FULL STORY →', w * .955, h * .73);
+        ctx.fillText('体験版公開中', w * .955, h * .705);
+        ctx.fillText('DLsiteで販売中 →', w * .955, h * .73);
 
         ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
@@ -609,8 +652,28 @@
           ? [[.48,.2],[.98,.15],[.93,.72],[.42,.77]]
           : [[.62,.19],[.98,.15],[.94,.7],[.56,.76]];
 
-        drawPanel(mainImage, leftPoints, 'saturate(.55) contrast(1.16)', .34, .18, -w * .14);
-        drawPanel(teaserIsCustom ? teaserImage : mainImage, teaserPoints, `blur(${state.teaserBlur}px) saturate(.72) brightness(.72)`, .76, .2, w * .12);
+        drawPanel(
+          detailIsCustom ? detailImage : mainImage,
+          leftPoints,
+          'saturate(.58) contrast(1.18)',
+          state.detailOpacity / 100,
+          0,
+          -w * .14,
+          state.detailPositionX,
+          state.detailPositionY,
+          state.detailZoom / 100
+        );
+        drawPanel(
+          teaserIsCustom ? teaserImage : mainImage,
+          teaserPoints,
+          `blur(${state.teaserBlur}px) saturate(.72) brightness(.72)`,
+          state.teaserOpacity / 100,
+          0,
+          w * .12,
+          state.teaserPositionX,
+          state.teaserPositionY,
+          state.teaserZoom / 100
+        );
         drawPanel(mainImage, heroPoints, 'contrast(1.05) saturate(.95)', 1, 0, 0);
 
         const veil = ctx.createLinearGradient(0, h * .38, 0, h * .82);
@@ -695,6 +758,12 @@
           showToast('預告圖已更新');
         });
       });
+      document.getElementById('detail-image-input').addEventListener('change', (event) => {
+        loadFile(event.target.files[0], detailImage, () => {
+          detailIsCustom = true;
+          showToast('特寫圖已更新');
+        });
+      });
 
       canvas.addEventListener('pointerdown', (event) => {
         dragState = {
@@ -731,6 +800,7 @@
       document.getElementById('reset-button').addEventListener('click', () => {
         Object.assign(state, defaultState);
         teaserIsCustom = false;
+        detailIsCustom = false;
         syncControls();
         resizeCanvas();
         showToast('模板已重設');
@@ -738,16 +808,21 @@
 
       document.getElementById('download-button').addEventListener('click', () => {
         draw();
-        canvas.toBlob((blob) => {
+        const downloadJpeg = (quality) => canvas.toBlob((blob) => {
           if (!blob) return;
-          const safeName = (state.seriesName || 'patreon-cover').replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-|-$/g, '') || 'patreon-cover';
+          if (blob.size > 2 * 1024 * 1024 && quality > .68) {
+            downloadJpeg(quality - .08);
+            return;
+          }
+          const safeName = (state.seriesName || 'dlsite-cover').replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-|-$/g, '') || 'dlsite-cover';
           const link = document.createElement('a');
-          link.download = `${safeName}-${state.ratio.replace(':', 'x')}.png`;
+          link.download = `${safeName}-${state.ratio.replace(':', 'x')}.jpg`;
           link.href = URL.createObjectURL(blob);
           link.click();
           setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-          showToast('PNG 已下載');
-        }, 'image/png');
+          showToast(`JPG 已下載 · ${Math.round(blob.size / 1024)}KB`);
+        }, 'image/jpeg', quality);
+        downloadJpeg(.92);
       });
 
       mainImage.onload = () => draw();
