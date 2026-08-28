@@ -282,7 +282,7 @@
             <input type="file" id="fileInput" multiple accept="image/jpeg,image/png,image/webp" class="hidden">
 
             <div id="selectionHint" class="absolute top-2 right-4 z-20 pointer-events-none select-none px-2.5 py-1 rounded-full bg-slate-900/80 border border-slate-700/80 text-[11px] text-slate-400 shadow-lg backdrop-blur-sm">
-                空白處拖曳框選 · Ctrl / ⌘ 切換 · Shift 連選
+                空白處拖曳框選 · Ctrl / ⌘ 切換 · Shift 連選 · 拖曳所選圖片可整組移動 · Esc 取消
             </div>
 
             <div id="gridContainer" class="flex flex-wrap gap-4 p-6 content-start min-h-full">
@@ -474,6 +474,10 @@
         let selectionAnchorId = null;
         let suppressNextCardClick = false;
         let marqueeState = null;
+        let pendingDraggedId = null;
+        let pendingDragGroupIds = [];
+        let activeDraggedId = null;
+        let activeDragGroupIds = [];
         let modalCloseTimer = null;
 
         // DOM 元素
@@ -504,6 +508,39 @@
         const zoomSlider = document.getElementById('zoomSlider');
         const gridSizeSlider = document.getElementById('gridSizeSlider');
 
+        function buildGroupedOrder(domIds, groupIds, draggedId) {
+            if (!draggedId || groupIds.length < 2) return [...domIds];
+
+            const groupSet = new Set(groupIds);
+            const draggedIndex = domIds.indexOf(draggedId);
+            if (draggedIndex < 0) return [...domIds];
+
+            const insertionIndex = domIds
+                .slice(0, draggedIndex)
+                .filter(id => !groupSet.has(id)).length;
+            const remainingIds = domIds.filter(id => !groupSet.has(id));
+            return [
+                ...remainingIds.slice(0, insertionIndex),
+                ...groupIds,
+                ...remainingIds.slice(insertionIndex)
+            ];
+        }
+
+        // Snapshot the selected group before Sortable handles the pointer.
+        // This prevents its fallback drag lifecycle from collapsing a
+        // multi-selection to the single card that initiated the drag.
+        gridContainer.addEventListener('pointerdown', event => {
+            if (event.button !== 0) return;
+            const card = event.target.closest('.img-slot');
+            if (!card) return;
+
+            const cardIds = getCardIds();
+            pendingDraggedId = card.id;
+            pendingDragGroupIds = selectedImageIds.has(card.id)
+                ? cardIds.filter(id => selectedImageIds.has(id))
+                : [card.id];
+        }, true);
+
         // === 初始化 SortableJS ===
         function initSortable() {
             sortableInstance = new Sortable(gridContainer, {
@@ -521,20 +558,38 @@
                         setSelection([draggedId], draggedId);
                         selectionAnchorId = draggedId;
                     }
+                    activeDraggedId = draggedId || null;
+                    activeDragGroupIds = draggedId && pendingDraggedId === draggedId
+                        ? [...pendingDragGroupIds]
+                        : draggedId ? [draggedId] : [];
                     suppressNextCardClick = true;
                     document.body.style.cursor = 'grabbing';
                 },
                 onEnd: function (evt) {
                     document.body.style.cursor = 'default';
                     setTimeout(() => { suppressNextCardClick = false; }, 0);
-                    const oldIndex = evt.oldIndex; 
-                    const newIndex = evt.newIndex;
-                    if (oldIndex !== newIndex) {
-                        const movedItem = images.splice(oldIndex, 1)[0];
-                        images.splice(newIndex, 0, movedItem);
-                        updateIndexes();
-                        if(selectedImageId) updatePreviewPane(selectedImageId);
+
+                    if (activeDraggedId && activeDragGroupIds.length > 1) {
+                        const domIds = getCardIds();
+                        const finalIds = buildGroupedOrder(
+                            domIds,
+                            activeDragGroupIds,
+                            activeDraggedId
+                        );
+
+                        finalIds.forEach(id => {
+                            const card = document.getElementById(id);
+                            if (card) gridContainer.appendChild(card);
+                        });
                     }
+
+                    updateIndexes();
+                    activeDraggedId = null;
+                    activeDragGroupIds = [];
+                    pendingDraggedId = null;
+                    pendingDragGroupIds = [];
+                    selectionAnchorId = null;
+                    setSelection([]);
                 },
                 onMove: function() {
                     return !marqueeState;
