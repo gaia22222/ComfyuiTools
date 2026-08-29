@@ -57,7 +57,7 @@
         }
 
         /* --- 圖片卡片設計 --- */
-        .img-slot {
+        .rename-image-card {
             width: var(--slot-size);
             height: var(--slot-size);
             background-color: #1e293b; /* Slate 800 */
@@ -73,19 +73,19 @@
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
 
-        .img-slot:hover {
+        .rename-image-card:hover {
             border-color: #64748b;
             transform: translateY(-2px);
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
         }
 
-        .img-slot.selected {
+        .rename-image-card.selected {
             border-color: #6366f1; /* Indigo 500 */
             box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3), 0 10px 15px -3px rgba(0, 0, 0, 0.4);
             transform: translateY(-2px);
         }
 
-        .img-slot.selected::after {
+        .rename-image-card.selected::after {
             content: '';
             position: absolute;
             inset: 0;
@@ -105,7 +105,7 @@
         }
 
         #leftPanel.marquee-active,
-        #leftPanel.marquee-active .img-slot {
+        #leftPanel.marquee-active .rename-image-card {
             cursor: crosshair;
             user-select: none;
         }
@@ -156,7 +156,7 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.2);
             border: 1px solid rgba(255,255,255,0.1);
         }
-        .img-slot.selected .index-badge {
+        .rename-image-card.selected .index-badge {
             background-color: #4f46e5;
         }
 
@@ -179,7 +179,7 @@
             transition: all 0.2s;
             z-index: 10;
         }
-        .img-slot:hover .remove-btn {
+        .rename-image-card:hover .remove-btn {
             opacity: 1;
             transform: scale(1);
         }
@@ -531,7 +531,7 @@
         // multi-selection to the single card that initiated the drag.
         gridContainer.addEventListener('pointerdown', event => {
             if (event.button !== 0) return;
-            const card = event.target.closest('.img-slot');
+            const card = event.target.closest('.rename-image-card');
             if (!card) return;
 
             const cardIds = getCardIds();
@@ -819,7 +819,7 @@
         // DOM 建立
         function createCardDOM(imgObj, index) {
             const div = document.createElement('div');
-            div.className = 'img-slot group';
+            div.className = 'rename-image-card group';
             div.id = imgObj.id;
             div.tabIndex = 0;
             div.setAttribute('role', 'button');
@@ -887,7 +887,7 @@
 
         // === 互動：選取與預覽 ===
         function selectImage(id) {
-            const prevSelected = document.querySelector('.img-slot.selected');
+            const prevSelected = document.querySelector('.rename-image-card.selected');
             if (prevSelected) prevSelected.classList.remove('selected');
             
             const currentCard = document.getElementById(id);
@@ -901,7 +901,7 @@
             if(selectedImageId) removeImage(selectedImageId);
         }
         function getCardIds() {
-            return Array.from(gridContainer.querySelectorAll('.img-slot'), card => card.id);
+            return Array.from(gridContainer.querySelectorAll('.rename-image-card'), card => card.id);
         }
 
         function setSelection(ids, primaryId = null) {
@@ -914,7 +914,7 @@
                 selectedImageId = Array.from(selectedImageIds).at(-1) || null;
             }
 
-            gridContainer.querySelectorAll('.img-slot').forEach(card => {
+            gridContainer.querySelectorAll('.rename-image-card').forEach(card => {
                 const isSelected = selectedImageIds.has(card.id);
                 card.classList.toggle('selected', isSelected);
                 card.setAttribute('aria-selected', String(isSelected));
@@ -1002,7 +1002,7 @@
 
             const selectionRect = { left, top, right, bottom };
             const nextIds = new Set(marqueeState.initialIds);
-            gridContainer.querySelectorAll('.img-slot').forEach(card => {
+            gridContainer.querySelectorAll('.rename-image-card').forEach(card => {
                 if (rectanglesIntersect(selectionRect, card.getBoundingClientRect())) {
                     nextIds.add(card.id);
                 }
@@ -1026,7 +1026,7 @@
 
         leftPanel.addEventListener('pointerdown', event => {
             if (event.button !== 0 || event.pointerType === 'touch' || !images.length) return;
-            if (event.target.closest('.img-slot, button, input, label')) return;
+            if (event.target.closest('.rename-image-card, button, input, label')) return;
 
             const additive = event.ctrlKey || event.metaKey || event.shiftKey;
             marqueeState = {
@@ -1188,7 +1188,7 @@
         }
 
         function updateIndexes() {
-            const cards = gridContainer.querySelectorAll('.img-slot');
+            const cards = gridContainer.querySelectorAll('.rename-image-card');
             let currentIdx = 0;
             const newOrderImages = [];
             
