@@ -3,32 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Image Sorter Pro V26</title>
+    <title>Image Sorter Pro V28</title>
     
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        slate: {
-                            850: '#1e293b',
-                            900: '#0f172a',
-                            950: '#020617',
-                        }
-                    }
-                }
-            }
-        }
-    </script>
-    
-    <!-- Libraries -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
-
+    <!-- Offline assets: the tool remains fully usable without an Internet connection. -->
+    <link rel="stylesheet" href="rename-assets/tailwind.min.css">
+    <script src="rename-assets/Sortable.min.js"></script>
+    <script src="rename-assets/jszip.min.js"></script>
+    <script src="rename-assets/FileSaver.min.js"></script>
     <style>
         :root {
             --slot-size: 140px;
@@ -90,7 +71,8 @@
             position: absolute;
             inset: 0;
             border-radius: 9px;
-            background: rgba(99, 102, 241, 0.14);
+            background: transparent;
+            box-shadow: inset 0 0 0 1px rgba(165, 180, 252, 0.7);
             pointer-events: none;
             z-index: 5;
         }
@@ -122,6 +104,27 @@
             transform: scale(1.05) rotate(2deg);
             z-index: 50;
             box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+
+        .rename-image-card.group-drag-member:not(.group-drag-leader) {
+            opacity: 0.4;
+            transform: scale(0.96);
+        }
+
+        .rename-image-card.group-drag-leader::before {
+            content: attr(data-drag-count) ' 張';
+            position: absolute;
+            right: 7px;
+            bottom: 7px;
+            z-index: 20;
+            padding: 3px 7px;
+            border-radius: 999px;
+            background: #4f46e5;
+            color: white;
+            font-size: 11px;
+            font-weight: 700;
+            box-shadow: 0 4px 10px rgba(15, 23, 42, 0.55);
+            pointer-events: none;
         }
 
         /* 卡片內的圖片 */
@@ -240,6 +243,156 @@
         .toggle-checkbox:checked + .toggle-label {
             background-color: #6366f1;
         }
+
+        .censor-badge {
+            position: absolute;
+            right: 6px;
+            bottom: 6px;
+            z-index: 12;
+            display: none;
+            padding: 3px 7px;
+            border-radius: 999px;
+            border: 1px solid rgba(52, 211, 153, 0.35);
+            background: rgba(6, 78, 59, 0.9);
+            color: #a7f3d0;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+        }
+
+        .rename-image-card.has-censor .censor-badge { display: block; }
+
+        #censorStudio {
+            position: fixed;
+            inset: 0;
+            z-index: 45;
+            display: none;
+            flex-direction: column;
+            background: #020617;
+            color: #e2e8f0;
+        }
+
+        #censorStudio.is-open { display: flex; }
+
+        .censor-toolbar {
+            min-height: 56px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 10px 16px;
+            border-bottom: 1px solid #1e293b;
+            background: #0f172a;
+        }
+
+        .censor-layout {
+            min-height: 0;
+            flex: 1;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 340px;
+        }
+
+        .censor-canvas-shell {
+            min-width: 0;
+            min-height: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: auto;
+            padding: 24px;
+            background-color: #020617;
+            background-image: radial-gradient(#1e293b 1px, transparent 1px);
+            background-size: 18px 18px;
+        }
+
+        #censorCanvas {
+            display: block;
+            max-width: 100%;
+            max-height: calc(100vh - 104px);
+            width: auto;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+            cursor: crosshair;
+            touch-action: none;
+            user-select: none;
+        }
+
+        .censor-sidebar {
+            min-height: 0;
+            overflow-y: auto;
+            padding: 16px;
+            border-left: 1px solid #1e293b;
+            background: #0f172a;
+        }
+
+        .censor-section {
+            margin-bottom: 14px;
+            padding: 14px;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            background: rgba(30, 41, 59, 0.55);
+        }
+
+        .censor-section h3 {
+            margin: 0 0 10px;
+            color: #cbd5e1;
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .censor-control {
+            width: 100%;
+            margin-top: 6px;
+            padding: 8px 10px;
+            border: 1px solid #475569;
+            border-radius: 7px;
+            background: #020617;
+            color: #f8fafc;
+        }
+
+        .censor-action {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            min-height: 36px;
+            padding: 8px 12px;
+            border: 1px solid #475569;
+            border-radius: 8px;
+            background: #1e293b;
+            color: #e2e8f0;
+            font-weight: 650;
+            transition: 0.15s ease;
+        }
+
+        .censor-action:hover { background: #334155; color: white; }
+        .censor-action:disabled { cursor: not-allowed; opacity: 0.45; }
+        .censor-action.primary { border-color: #6366f1; background: #4f46e5; color: white; }
+        .censor-action.primary:hover { background: #6366f1; }
+        .censor-action.danger { border-color: rgba(244, 63, 94, 0.45); color: #fda4af; }
+
+        .censor-status {
+            margin-top: 8px;
+            padding: 8px 10px;
+            border-radius: 7px;
+            background: rgba(15, 23, 42, 0.75);
+            color: #94a3b8;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .censor-status.ready { color: #a7f3d0; background: rgba(6, 78, 59, 0.35); }
+        .censor-status.error { color: #fda4af; background: rgba(127, 29, 29, 0.35); }
+
+        @media (max-width: 900px) {
+            .censor-layout { grid-template-columns: 1fr; grid-template-rows: minmax(300px, 1fr) minmax(240px, 42vh); }
+            .censor-sidebar { border-left: 0; border-top: 1px solid #1e293b; }
+            #censorCanvas { max-height: calc(58vh - 72px); }
+            .censor-toolbar { align-items: flex-start; }
+        }
     </style>
 </head>
 <body class="flex flex-col h-screen overflow-hidden text-sm selection:bg-indigo-500 selection:text-white">
@@ -258,7 +411,12 @@
             </div>
         </div>
 
-        <div class="flex items-center gap-4">
+        <div class="flex items-center gap-3">
+            <button id="openCensorBtn" onclick="openCensorStudio()" class="px-3 py-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 hover:text-rose-200 transition flex items-center gap-2 text-xs font-semibold" title="在瀏覽器本機框選並套用馬賽克或模糊">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 0h6v6h-6v-6z"></path></svg>
+                成人漫畫打碼
+            </button>
+
             <!-- 網格大小 -->
             <div class="hidden md:flex items-center gap-2 group">
                 <svg class="w-4 h-4 text-slate-500 group-hover:text-slate-300 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
@@ -442,23 +600,105 @@
         </div>
     </div>
 
-    <!-- Modal (Modern) -->
-    <div id="modalOverlay" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center z-50 transition-opacity opacity-0">
-        <div class="bg-slate-900 rounded-xl p-0 max-w-md w-full border border-slate-700 shadow-2xl transform scale-95 transition-all" id="modalBox">
-            <div class="p-6">
-                <h3 class="text-xl font-bold text-white mb-2 flex items-center gap-2" id="modalTitle">
-                    標題
-                </h3>
-                <p class="text-slate-300 mb-6 leading-relaxed" id="modalMsg">訊息內容</p>
-                
-                <!-- Progress Bar -->
-                <div id="progressBarContainer" class="hidden w-full bg-slate-800 rounded-full h-2 mb-4 overflow-hidden">
+    <!-- Browser-local censor workspace: the MVP never uploads images. -->
+    <section id="censorStudio" aria-hidden="true" aria-label="成人漫畫打碼工作室">
+        <div class="censor-toolbar">
+            <div class="flex items-center gap-3 min-w-0">
+                <button class="censor-action" type="button" onclick="closeCensorStudio()">← 返回排序</button>
+                <div class="min-w-0">
+                    <div class="font-bold text-slate-100">成人漫畫打碼工作室 <span class="text-xs text-emerald-300 ml-2">本機處理</span></div>
+                    <div id="censorImageName" class="text-xs text-slate-500 truncate">尚未選取圖片</div>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <button id="censorPrevBtn" class="censor-action" type="button" onclick="navigateCensorImage(-1)" aria-label="上一張">上一張</button>
+                <span id="censorPosition" class="text-xs text-slate-400 min-w-[60px] text-center">0 / 0</span>
+                <button id="censorNextBtn" class="censor-action" type="button" onclick="navigateCensorImage(1)" aria-label="下一張">下一張</button>
+            </div>
+        </div>
+
+        <div class="censor-layout">
+            <div id="censorCanvasShell" class="censor-canvas-shell">
+                <canvas id="censorCanvas" width="1" height="1" aria-label="拖曳建立打碼區域"></canvas>
+            </div>
+
+            <aside class="censor-sidebar custom-scrollbar">
+                <div class="censor-section">
+                    <h3>MVP · 立即可用</h3>
+                    <p class="text-xs text-slate-400 leading-relaxed mb-3">在圖片上拖曳建立框。輸出以 Canvas 在此瀏覽器內產生，不會把圖片上傳到伺服器。</p>
+                    <label class="text-xs text-slate-400">效果
+                        <select id="censorStyle" class="censor-control">
+                            <option value="mosaic">馬賽克</option>
+                            <option value="blur">模糊</option>
+                            <option value="black">黑色遮罩</option>
+                            <option value="white">白色遮罩</option>
+                        </select>
+                    </label>
+                    <label class="block mt-3 text-xs text-slate-400">馬賽克格 / 模糊強度 <span id="censorStrengthValue" class="text-indigo-300">16</span>
+                        <input id="censorStrength" type="range" min="4" max="48" value="16" class="w-full mt-2">
+                    </label>
+                    <label class="block mt-3 text-xs text-slate-400">向外擴張 <span id="censorExpansionValue" class="text-indigo-300">8 px</span>
+                        <input id="censorExpansion" type="range" min="0" max="48" value="8" class="w-full mt-2">
+                    </label>
+                    <div class="grid grid-cols-2 gap-2 mt-4">
+                        <button id="censorUndoBtn" class="censor-action" type="button" onclick="undoCensorRegion()">復原一框</button>
+                        <button id="censorClearBtn" class="censor-action danger" type="button" onclick="clearCensorRegions()">清除本張</button>
+                    </div>
+                    <div id="censorRegionStatus" class="censor-status">本張尚未建立打碼框。</div>
+                </div>
+
+                <div class="censor-section">
+                    <h3>批量處理</h3>
+                    <button id="copyCensorBtn" class="censor-action w-full" type="button" onclick="copyCensorRegionsToSelection()">複製本張框到所選圖片</button>
+                    <button id="applyCurrentCensorBtn" class="censor-action primary w-full mt-2" type="button" onclick="applyCurrentCensor()">套用本張打碼</button>
+                    <button id="applyAllCensorBtn" class="censor-action primary w-full mt-2" type="button" onclick="applyAllCensors()">套用所有已標記圖片</button>
+                    <button id="restoreCurrentBtn" class="censor-action w-full mt-2" type="button" onclick="restoreCurrentOriginal()">還原本張原圖</button>
+                    <p class="text-[11px] text-slate-500 leading-relaxed mt-3">套用只會更新記憶體中的預覽；按「開始匯出」才會建立新檔，不會改寫原圖。</p>
+                </div>
+
+                <details class="censor-section">
+                    <summary class="cursor-pointer text-xs font-bold tracking-wider text-amber-300">自動偵測（需額外模型）</summary>
+                    <p class="text-xs text-slate-400 leading-relaxed mt-3">純前端推理需要另行提供 ONNX Runtime Web、相容的 YOLO 偵測模型與 JSON 設定。模型準確度取決於訓練資料；輸出前仍應逐張覆核。</p>
+                    <input id="censorModelInput" type="file" accept=".onnx,.json,application/json" multiple class="hidden">
+                    <button class="censor-action w-full mt-3" type="button" onclick="document.getElementById('censorModelInput').click()">載入 ONNX + JSON</button>
+                    <button id="runCensorDetectionBtn" class="censor-action w-full mt-2" type="button" onclick="runCensorDetection()" disabled>偵測目前圖片</button>
+                    <div id="censorModelStatus" class="censor-status">尚未載入。部署者需加入 <code>rename-assets/onnxruntime-web/</code> runtime；模型由使用者在本機選取，不會上傳。</div>
+                </details>
+            </aside>
+        </div>
+    </section>
+
+    <!-- Modal -->
+    <div id="modalOverlay" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center z-50 transition-opacity opacity-0 p-4">
+        <div class="bg-slate-900 rounded-xl w-full max-w-4xl max-h-[90vh] border border-slate-700 shadow-2xl transform scale-95 transition-all flex flex-col" id="modalBox" role="dialog" aria-modal="true" aria-labelledby="modalTitle" aria-describedby="modalMsg">
+            <div class="p-6 flex flex-col min-h-0">
+                <h3 class="text-xl font-bold text-white mb-2 flex items-center gap-2" id="modalTitle">標題</h3>
+                <p class="text-slate-300 mb-4 leading-relaxed" id="modalMsg">訊息內容</p>
+
+                <div id="exportPreviewContainer" class="hidden min-h-0 mb-4 rounded-lg border border-slate-700 overflow-hidden bg-slate-950/60">
+                    <div class="overflow-auto max-h-[52vh] custom-scrollbar">
+                        <table class="w-full text-left text-xs">
+                            <thead class="sticky top-0 z-10 bg-slate-800 text-slate-300">
+                                <tr>
+                                    <th class="px-3 py-2 w-14">#</th>
+                                    <th class="px-3 py-2">原始檔名</th>
+                                    <th class="px-3 py-2">輸出檔名</th>
+                                    <th class="px-3 py-2 w-24 text-right">大小</th>
+                                </tr>
+                            </thead>
+                            <tbody id="exportPreviewBody" class="divide-y divide-slate-800"></tbody>
+                        </table>
+                    </div>
+                    <div id="exportPreviewMore" class="hidden px-3 py-2 text-xs text-amber-300 bg-amber-500/10 border-t border-amber-500/20"></div>
+                </div>
+
+                <div id="progressBarContainer" class="hidden w-full bg-slate-800 rounded-full h-2 mb-4 overflow-hidden" role="progressbar" aria-label="匯出進度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
                     <div id="progressBar" class="bg-indigo-500 h-full rounded-full transition-all duration-300 ease-out" style="width: 0%"></div>
                 </div>
 
-                <div class="flex justify-end gap-3 pt-2">
-                    <button id="modalCancelBtn" onclick="closeModal()" class="hidden px-4 py-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition">取消</button>
-                    <button id="modalConfirmBtn" onclick="closeModal()" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium shadow-lg shadow-indigo-500/20 transition">確定</button>
+                <div class="flex justify-end gap-3 pt-2 shrink-0">
+                    <button id="modalCancelBtn" class="hidden px-4 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition">取消</button>
+                    <button id="modalConfirmBtn" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium shadow-lg shadow-indigo-500/20 transition">確定</button>
                 </div>
             </div>
         </div>
@@ -479,6 +719,15 @@
         let activeDraggedId = null;
         let activeDragGroupIds = [];
         let modalCloseTimer = null;
+        let modalDecisionResolver = null;
+        let lastModalFocus = null;
+        let activeCensorImageId = null;
+        let censorSourceImage = null;
+        let censorDraftRegion = null;
+        let censorPointerStart = null;
+        let censorSession = null;
+        let censorModelConfig = null;
+        let ortRuntimePromise = null;
 
         // DOM 元素
         const gridContainer = document.getElementById('gridContainer');
@@ -507,6 +756,13 @@
         
         const zoomSlider = document.getElementById('zoomSlider');
         const gridSizeSlider = document.getElementById('gridSizeSlider');
+        const censorStudio = document.getElementById('censorStudio');
+        const censorCanvas = document.getElementById('censorCanvas');
+        const censorContext = censorCanvas.getContext('2d');
+        const censorStyle = document.getElementById('censorStyle');
+        const censorStrength = document.getElementById('censorStrength');
+        const censorExpansion = document.getElementById('censorExpansion');
+        const censorModelInput = document.getElementById('censorModelInput');
 
         function buildGroupedOrder(domIds, groupIds, draggedId) {
             if (!draggedId || groupIds.length < 2) return [...domIds];
@@ -562,6 +818,11 @@
                     activeDragGroupIds = draggedId && pendingDraggedId === draggedId
                         ? [...pendingDragGroupIds]
                         : draggedId ? [draggedId] : [];
+                    if (activeDragGroupIds.length > 1) {
+                        activeDragGroupIds.forEach(id => document.getElementById(id)?.classList.add('group-drag-member'));
+                        evt.item.classList.add('group-drag-leader');
+                        evt.item.dataset.dragCount = String(activeDragGroupIds.length);
+                    }
                     suppressNextCardClick = true;
                     document.body.style.cursor = 'grabbing';
                 },
@@ -583,13 +844,20 @@
                         });
                     }
 
+                    const completedDraggedId = activeDraggedId;
+                    const completedGroupIds = [...activeDragGroupIds];
+                    gridContainer.querySelectorAll('.group-drag-member, .group-drag-leader').forEach(card => {
+                        card.classList.remove('group-drag-member', 'group-drag-leader');
+                        delete card.dataset.dragCount;
+                    });
+
                     updateIndexes();
+                    selectionAnchorId = completedDraggedId;
+                    setSelection(completedGroupIds, completedDraggedId);
                     activeDraggedId = null;
                     activeDragGroupIds = [];
                     pendingDraggedId = null;
                     pendingDragGroupIds = [];
-                    selectionAnchorId = null;
-                    setSelection([]);
                 },
                 onMove: function() {
                     return !marqueeState;
@@ -756,7 +1024,10 @@
                     id: id,
                     file: file,
                     previewUrl: null,
-                    loaded: false
+                    loaded: false,
+                    censorRegions: [],
+                    censorSettings: null,
+                    censoredBlob: null
                 };
                 
                 images.push(imgObj);
@@ -848,6 +1119,11 @@
                 removeImage(imgObj.id);
             };
             div.appendChild(removeBtn);
+
+            const censorBadge = document.createElement('div');
+            censorBadge.className = 'censor-badge';
+            censorBadge.textContent = '已標記';
+            div.appendChild(censorBadge);
 
             // Loading Spinner
             const spinner = document.createElement('div');
@@ -1209,90 +1485,744 @@
             setSelection(selectedImageIds, selectedImageId);
         }
 
+        // === 成人漫畫打碼：純前端 MVP + 可選 ONNX 擴充 ===
+        function getActiveCensorImage() {
+            return images.find(image => image.id === activeCensorImageId) || null;
+        }
+
+        function getCensorSettingsFromControls() {
+            return {
+                style: censorStyle.value,
+                strength: Number(censorStrength.value),
+                expansion: Number(censorExpansion.value)
+            };
+        }
+
+        function setCensorControls(settings = {}) {
+            censorStyle.value = settings.style || 'mosaic';
+            censorStrength.value = String(settings.strength || 16);
+            censorExpansion.value = String(settings.expansion ?? 8);
+            document.getElementById('censorStrengthValue').textContent = censorStrength.value;
+            document.getElementById('censorExpansionValue').textContent = `${censorExpansion.value} px`;
+        }
+
+        function saveCurrentCensorSettings() {
+            const image = getActiveCensorImage();
+            if (!image) return;
+            image.censorSettings = getCensorSettingsFromControls();
+            invalidateCensoredBlob(image);
+            renderCensorCanvas();
+        }
+
+        function invalidateCensoredBlob(image) {
+            if (!image) return;
+            image.censoredBlob = null;
+        }
+
+        function updateCensorBadge(image) {
+            const card = document.getElementById(image.id);
+            if (!card) return;
+            const count = image.censorRegions?.length || 0;
+            card.classList.toggle('has-censor', count > 0);
+            const badge = card.querySelector('.censor-badge');
+            if (badge) badge.textContent = count ? `${count} 框` : '已標記';
+        }
+
+        function refreshImagePreview(image, blob = image.file) {
+            if (image.previewUrl?.startsWith('blob:')) URL.revokeObjectURL(image.previewUrl);
+            image.previewUrl = URL.createObjectURL(blob);
+            const cardImage = document.getElementById(image.id)?.querySelector('.thumb-img');
+            if (cardImage) cardImage.src = image.previewUrl;
+            if (selectedImageId === image.id) updatePreviewPane(image.id);
+        }
+
+        function loadImageElement(blob) {
+            return new Promise((resolve, reject) => {
+                const image = new Image();
+                const url = URL.createObjectURL(blob);
+                image.onload = () => {
+                    URL.revokeObjectURL(url);
+                    resolve(image);
+                };
+                image.onerror = () => {
+                    URL.revokeObjectURL(url);
+                    reject(new Error('圖片解碼失敗'));
+                };
+                image.src = url;
+            });
+        }
+
+        async function openCensorStudio() {
+            if (!images.length) {
+                showModal('尚未載入圖片', '請先加入 JPG、PNG 或 WEBP 圖片，再開啟打碼工作室。');
+                return;
+            }
+            censorStudio.classList.add('is-open');
+            censorStudio.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
+            await loadCensorImage(selectedImageId || images[0].id);
+        }
+
+        function closeCensorStudio() {
+            censorStudio.classList.remove('is-open');
+            censorStudio.setAttribute('aria-hidden', 'true');
+            document.body.style.overflow = '';
+            censorDraftRegion = null;
+            censorPointerStart = null;
+        }
+
+        async function loadCensorImage(id) {
+            const image = images.find(item => item.id === id);
+            if (!image) return;
+            activeCensorImageId = id;
+            document.getElementById('censorImageName').textContent = image.file.name;
+            const index = images.indexOf(image);
+            document.getElementById('censorPosition').textContent = `${index + 1} / ${images.length}`;
+            document.getElementById('censorPrevBtn').disabled = index <= 0;
+            document.getElementById('censorNextBtn').disabled = index >= images.length - 1;
+            setCensorControls(image.censorSettings || undefined);
+            censorSourceImage = await loadImageElement(image.file);
+            censorCanvas.width = censorSourceImage.naturalWidth || censorSourceImage.width;
+            censorCanvas.height = censorSourceImage.naturalHeight || censorSourceImage.height;
+            renderCensorCanvas();
+            updateCensorRegionStatus();
+        }
+
+        async function navigateCensorImage(direction) {
+            const currentIndex = images.findIndex(image => image.id === activeCensorImageId);
+            const next = images[currentIndex + direction];
+            if (next) await loadCensorImage(next.id);
+        }
+
+        function normalizedRegion(region) {
+            const x = region.width < 0 ? region.x + region.width : region.x;
+            const y = region.height < 0 ? region.y + region.height : region.y;
+            return {
+                ...region,
+                x: Math.max(0, Math.min(1, x)),
+                y: Math.max(0, Math.min(1, y)),
+                width: Math.max(0, Math.min(1 - x, Math.abs(region.width))),
+                height: Math.max(0, Math.min(1 - y, Math.abs(region.height)))
+            };
+        }
+
+        function expandedPixelRect(region, width, height, expansion) {
+            const normalized = normalizedRegion(region);
+            const left = Math.max(0, Math.floor(normalized.x * width - expansion));
+            const top = Math.max(0, Math.floor(normalized.y * height - expansion));
+            const right = Math.min(width, Math.ceil((normalized.x + normalized.width) * width + expansion));
+            const bottom = Math.min(height, Math.ceil((normalized.y + normalized.height) * height + expansion));
+            return { x: left, y: top, width: Math.max(1, right - left), height: Math.max(1, bottom - top) };
+        }
+
+        function applyCensorEffect(context, sourceImage, region, settings, width, height) {
+            const rect = expandedPixelRect(region, width, height, settings.expansion || 0);
+            if (settings.style === 'black' || settings.style === 'white') {
+                context.fillStyle = settings.style === 'black' ? '#000000' : '#ffffff';
+                context.fillRect(rect.x, rect.y, rect.width, rect.height);
+                return;
+            }
+
+            if (settings.style === 'blur') {
+                context.save();
+                context.beginPath();
+                context.rect(rect.x, rect.y, rect.width, rect.height);
+                context.clip();
+                context.filter = `blur(${Math.max(2, settings.strength)}px)`;
+                const bleed = Math.max(4, settings.strength * 2);
+                context.drawImage(
+                    sourceImage,
+                    Math.max(0, rect.x - bleed),
+                    Math.max(0, rect.y - bleed),
+                    Math.min(width - Math.max(0, rect.x - bleed), rect.width + bleed * 2),
+                    Math.min(height - Math.max(0, rect.y - bleed), rect.height + bleed * 2),
+                    Math.max(0, rect.x - bleed),
+                    Math.max(0, rect.y - bleed),
+                    Math.min(width - Math.max(0, rect.x - bleed), rect.width + bleed * 2),
+                    Math.min(height - Math.max(0, rect.y - bleed), rect.height + bleed * 2)
+                );
+                context.restore();
+                return;
+            }
+
+            const block = Math.max(2, settings.strength || 16);
+            const sampleWidth = Math.max(1, Math.ceil(rect.width / block));
+            const sampleHeight = Math.max(1, Math.ceil(rect.height / block));
+            const sampleCanvas = document.createElement('canvas');
+            sampleCanvas.width = sampleWidth;
+            sampleCanvas.height = sampleHeight;
+            const sampleContext = sampleCanvas.getContext('2d');
+            sampleContext.imageSmoothingEnabled = true;
+            sampleContext.drawImage(sourceImage, rect.x, rect.y, rect.width, rect.height, 0, 0, sampleWidth, sampleHeight);
+            context.save();
+            context.imageSmoothingEnabled = false;
+            context.drawImage(sampleCanvas, 0, 0, sampleWidth, sampleHeight, rect.x, rect.y, rect.width, rect.height);
+            context.restore();
+        }
+
+        function renderCensorCanvas() {
+            const image = getActiveCensorImage();
+            if (!image || !censorSourceImage || !censorContext) return;
+            const settings = image.censorSettings || getCensorSettingsFromControls();
+            censorContext.clearRect(0, 0, censorCanvas.width, censorCanvas.height);
+            censorContext.drawImage(censorSourceImage, 0, 0, censorCanvas.width, censorCanvas.height);
+            (image.censorRegions || []).forEach(region => {
+                applyCensorEffect(censorContext, censorSourceImage, region, settings, censorCanvas.width, censorCanvas.height);
+                drawCensorOutline(censorContext, region, region.source === 'model' ? '#fbbf24' : '#fb7185');
+            });
+            if (censorDraftRegion) drawCensorOutline(censorContext, censorDraftRegion, '#ffffff', true);
+        }
+
+        function drawCensorOutline(context, region, color, dashed = false) {
+            const normalized = normalizedRegion(region);
+            context.save();
+            context.strokeStyle = color;
+            context.lineWidth = Math.max(2, Math.round(Math.min(censorCanvas.width, censorCanvas.height) / 500));
+            context.setLineDash(dashed ? [10, 7] : []);
+            context.strokeRect(
+                normalized.x * censorCanvas.width,
+                normalized.y * censorCanvas.height,
+                normalized.width * censorCanvas.width,
+                normalized.height * censorCanvas.height
+            );
+            context.restore();
+        }
+
+        function canvasPoint(event) {
+            const rect = censorCanvas.getBoundingClientRect();
+            return {
+                x: Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)),
+                y: Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height))
+            };
+        }
+
+        censorCanvas.addEventListener('pointerdown', event => {
+            if (!getActiveCensorImage() || event.button !== 0) return;
+            event.preventDefault();
+            const point = canvasPoint(event);
+            censorPointerStart = point;
+            censorDraftRegion = { x: point.x, y: point.y, width: 0, height: 0, source: 'manual' };
+            censorCanvas.setPointerCapture(event.pointerId);
+            renderCensorCanvas();
+        });
+
+        censorCanvas.addEventListener('pointermove', event => {
+            if (!censorPointerStart || !censorDraftRegion) return;
+            const point = canvasPoint(event);
+            censorDraftRegion.width = point.x - censorPointerStart.x;
+            censorDraftRegion.height = point.y - censorPointerStart.y;
+            renderCensorCanvas();
+        });
+
+        function finishCensorDraw(event) {
+            if (!censorPointerStart || !censorDraftRegion) return;
+            const image = getActiveCensorImage();
+            const region = normalizedRegion(censorDraftRegion);
+            censorPointerStart = null;
+            censorDraftRegion = null;
+            if (event?.pointerId != null && censorCanvas.hasPointerCapture(event.pointerId)) {
+                censorCanvas.releasePointerCapture(event.pointerId);
+            }
+            if (!image || region.width * censorCanvas.width < 4 || region.height * censorCanvas.height < 4) {
+                renderCensorCanvas();
+                return;
+            }
+            image.censorRegions.push(region);
+            image.censorSettings = getCensorSettingsFromControls();
+            invalidateCensoredBlob(image);
+            refreshImagePreview(image, image.file);
+            updateCensorBadge(image);
+            updateCensorRegionStatus();
+            renderCensorCanvas();
+        }
+
+        censorCanvas.addEventListener('pointerup', finishCensorDraw);
+        censorCanvas.addEventListener('pointercancel', finishCensorDraw);
+
+        function updateCensorRegionStatus(message = '') {
+            const image = getActiveCensorImage();
+            const count = image?.censorRegions?.length || 0;
+            const status = document.getElementById('censorRegionStatus');
+            status.textContent = message || (count ? `本張有 ${count} 個打碼框；粉紅色為手動、黃色為模型建議。` : '本張尚未建立打碼框。');
+            document.getElementById('censorUndoBtn').disabled = count === 0;
+            document.getElementById('censorClearBtn').disabled = count === 0;
+        }
+
+        function undoCensorRegion() {
+            const image = getActiveCensorImage();
+            if (!image?.censorRegions?.length) return;
+            image.censorRegions.pop();
+            invalidateCensoredBlob(image);
+            refreshImagePreview(image, image.file);
+            updateCensorBadge(image);
+            updateCensorRegionStatus();
+            renderCensorCanvas();
+        }
+
+        function clearCensorRegions() {
+            const image = getActiveCensorImage();
+            if (!image) return;
+            image.censorRegions = [];
+            invalidateCensoredBlob(image);
+            refreshImagePreview(image, image.file);
+            updateCensorBadge(image);
+            updateCensorRegionStatus();
+            renderCensorCanvas();
+        }
+
+        function copyCensorRegionsToSelection() {
+            const source = getActiveCensorImage();
+            if (!source?.censorRegions?.length) {
+                updateCensorRegionStatus('請先在目前圖片建立至少一個打碼框。');
+                return;
+            }
+            const targets = images.filter(image => selectedImageIds.has(image.id) && image.id !== source.id);
+            if (!targets.length) {
+                updateCensorRegionStatus('請先返回排序頁，以 Ctrl / Shift 選取其他構圖相近的圖片。');
+                return;
+            }
+            targets.forEach(image => {
+                image.censorRegions = source.censorRegions.map(region => ({ ...region, source: 'manual' }));
+                image.censorSettings = { ...(source.censorSettings || getCensorSettingsFromControls()) };
+                invalidateCensoredBlob(image);
+                refreshImagePreview(image, image.file);
+                updateCensorBadge(image);
+            });
+            updateCensorRegionStatus(`已把 ${source.censorRegions.length} 個框複製到 ${targets.length} 張所選圖片。`);
+        }
+
+        function canvasToBlob(canvas, type, quality) {
+            return new Promise((resolve, reject) => {
+                canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Canvas 輸出失敗')), type, quality);
+            });
+        }
+
+        async function renderCensoredBlob(image) {
+            if (!image.censorRegions?.length) return image.file;
+            if (image.censoredBlob) return image.censoredBlob;
+            const source = await loadImageElement(image.file);
+            const canvas = document.createElement('canvas');
+            canvas.width = source.naturalWidth || source.width;
+            canvas.height = source.naturalHeight || source.height;
+            const context = canvas.getContext('2d');
+            context.drawImage(source, 0, 0, canvas.width, canvas.height);
+            const settings = image.censorSettings || { style: 'mosaic', strength: 16, expansion: 8 };
+            image.censorRegions.forEach(region => applyCensorEffect(context, source, region, settings, canvas.width, canvas.height));
+            const type = SUPPORTED_IMAGE_TYPES.has(image.file.type) ? image.file.type : 'image/png';
+            const quality = type === 'image/png' ? undefined : 0.95;
+            image.censoredBlob = await canvasToBlob(canvas, type, quality);
+            return image.censoredBlob;
+        }
+
+        async function applyCurrentCensor() {
+            const image = getActiveCensorImage();
+            if (!image?.censorRegions?.length) {
+                updateCensorRegionStatus('本張沒有打碼框，未作變更。');
+                return;
+            }
+            const button = document.getElementById('applyCurrentCensorBtn');
+            button.disabled = true;
+            try {
+                const blob = await renderCensoredBlob(image);
+                refreshImagePreview(image, blob);
+                updateCensorRegionStatus(`已在本機預覽套用 ${image.censorRegions.length} 個框；匯出時會使用此結果。`);
+            } catch (error) {
+                updateCensorRegionStatus(`套用失敗：${error.message}`);
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        async function applyAllCensors() {
+            const marked = images.filter(image => image.censorRegions?.length);
+            if (!marked.length) {
+                updateCensorRegionStatus('沒有已標記的圖片。');
+                return;
+            }
+            const button = document.getElementById('applyAllCensorBtn');
+            const original = button.textContent;
+            button.disabled = true;
+            try {
+                for (let index = 0; index < marked.length; index++) {
+                    button.textContent = `處理中 ${index + 1} / ${marked.length}`;
+                    const blob = await renderCensoredBlob(marked[index]);
+                    refreshImagePreview(marked[index], blob);
+                    await new Promise(resolve => requestAnimationFrame(resolve));
+                }
+                updateCensorRegionStatus(`已更新 ${marked.length} 張本機預覽；請逐張覆核後再匯出。`);
+            } catch (error) {
+                updateCensorRegionStatus(`批量處理失敗：${error.message}`);
+            } finally {
+                button.disabled = false;
+                button.textContent = original;
+            }
+        }
+
+        function restoreCurrentOriginal() {
+            const image = getActiveCensorImage();
+            if (!image) return;
+            image.censorRegions = [];
+            image.censorSettings = null;
+            invalidateCensoredBlob(image);
+            refreshImagePreview(image, image.file);
+            updateCensorBadge(image);
+            setCensorControls();
+            updateCensorRegionStatus('已還原本張原圖並移除所有打碼框。');
+            renderCensorCanvas();
+        }
+
+        [censorStyle, censorStrength, censorExpansion].forEach(control => {
+            control.addEventListener('input', () => {
+                document.getElementById('censorStrengthValue').textContent = censorStrength.value;
+                document.getElementById('censorExpansionValue').textContent = `${censorExpansion.value} px`;
+                saveCurrentCensorSettings();
+            });
+        });
+
+        document.addEventListener('keydown', event => {
+            if (!censorStudio.classList.contains('is-open')) return;
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                closeCensorStudio();
+                return;
+            }
+            if ((event.key === 'Delete' || event.key === 'Backspace') && !event.target.matches('input, select, textarea')) {
+                event.preventDefault();
+                undoCensorRegion();
+            }
+        });
+
+        function setCensorModelStatus(message, state = '') {
+            const status = document.getElementById('censorModelStatus');
+            status.textContent = message;
+            status.classList.toggle('ready', state === 'ready');
+            status.classList.toggle('error', state === 'error');
+        }
+
+        function ensureOrtRuntime() {
+            if (globalThis.ort?.InferenceSession) return Promise.resolve(globalThis.ort);
+            if (ortRuntimePromise) return ortRuntimePromise;
+            ortRuntimePromise = new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = 'rename-assets/onnxruntime-web/ort.min.js';
+                script.onload = () => {
+                    if (!globalThis.ort?.InferenceSession) {
+                        reject(new Error('ONNX Runtime Web 載入後沒有可用的 InferenceSession'));
+                        return;
+                    }
+                    globalThis.ort.env.wasm.wasmPaths = 'rename-assets/onnxruntime-web/';
+                    // GitHub Pages cannot add the cross-origin isolation headers
+                    // required by SharedArrayBuffer, so use the stable single-thread path.
+                    globalThis.ort.env.wasm.numThreads = 1;
+                    globalThis.ort.env.wasm.proxy = false;
+                    resolve(globalThis.ort);
+                };
+                script.onerror = () => reject(new Error('找不到 ONNX Runtime Web；請先依 README 加入 runtime 檔案'));
+                document.head.appendChild(script);
+            }).catch(error => {
+                ortRuntimePromise = null;
+                throw error;
+            });
+            return ortRuntimePromise;
+        }
+
+        function validateCensorModelConfig(config) {
+            const inputSize = Number(config.inputSize || 640);
+            const labels = Array.isArray(config.labels) ? config.labels : [];
+            const targetClassIds = (Array.isArray(config.targetClassIds)
+                ? config.targetClassIds.map(Number)
+                : Array.isArray(config.targetLabels)
+                    ? config.targetLabels.map(label => labels.indexOf(label)).filter(index => index >= 0)
+                    : []).filter(index => Number.isInteger(index) && index >= 0 && index < labels.length);
+            if (!Number.isFinite(inputSize) || inputSize < 32) throw new Error('JSON 的 inputSize 無效');
+            if (!labels.length) throw new Error('JSON 必須包含 labels 陣列');
+            if (!targetClassIds.length) throw new Error('JSON 必須包含 targetClassIds 或 targetLabels');
+            return {
+                inputSize,
+                labels,
+                targetClassIds,
+                scoreThreshold: Number(config.scoreThreshold ?? 0.45),
+                iouThreshold: Number(config.iouThreshold ?? 0.45),
+                hasObjectness: Boolean(config.hasObjectness),
+                boxesNormalized: Boolean(config.boxesNormalized)
+            };
+        }
+
+        censorModelInput.addEventListener('change', async event => {
+            const files = Array.from(event.target.files || []);
+            const modelFile = files.find(file => /\.onnx$/i.test(file.name));
+            const configFile = files.find(file => /\.json$/i.test(file.name));
+            document.getElementById('runCensorDetectionBtn').disabled = true;
+            if (!modelFile || !configFile) {
+                setCensorModelStatus('請同時選取一個 .onnx 模型與一個 .json 設定檔。', 'error');
+                return;
+            }
+            setCensorModelStatus('正在本機載入 runtime 與模型…');
+            try {
+                const config = validateCensorModelConfig(JSON.parse(await configFile.text()));
+                const runtime = await ensureOrtRuntime();
+                censorSession = await runtime.InferenceSession.create(await modelFile.arrayBuffer(), { executionProviders: ['wasm'] });
+                censorModelConfig = config;
+                document.getElementById('runCensorDetectionBtn').disabled = false;
+                setCensorModelStatus(`已載入 ${modelFile.name}；輸入 ${config.inputSize}×${config.inputSize}，目標類別 ${config.targetClassIds.length} 個。`, 'ready');
+            } catch (error) {
+                censorSession = null;
+                censorModelConfig = null;
+                setCensorModelStatus(`模型載入失敗：${error.message}`, 'error');
+            } finally {
+                event.target.value = '';
+            }
+        });
+
+        function tensorValue(data, channelsFirst, channels, anchors, channel, anchor) {
+            return channelsFirst ? data[channel * anchors + anchor] : data[anchor * channels + channel];
+        }
+
+        function detectionIoU(a, b) {
+            const left = Math.max(a.x, b.x);
+            const top = Math.max(a.y, b.y);
+            const right = Math.min(a.x + a.width, b.x + b.width);
+            const bottom = Math.min(a.y + a.height, b.y + b.height);
+            const intersection = Math.max(0, right - left) * Math.max(0, bottom - top);
+            const union = a.width * a.height + b.width * b.height - intersection;
+            return union > 0 ? intersection / union : 0;
+        }
+
+        function parseYoloDetections(output, config) {
+            if (!output?.dims || output.dims.length !== 3 || output.dims[0] !== 1) {
+                throw new Error('只支援三維 YOLO raw detection 輸出 [1, channels, anchors] 或 [1, anchors, channels]');
+            }
+            const expectedChannels = 4 + config.labels.length + (config.hasObjectness ? 1 : 0);
+            const channelsFirst = output.dims[1] === expectedChannels;
+            const channels = channelsFirst ? output.dims[1] : output.dims[2];
+            const anchors = channelsFirst ? output.dims[2] : output.dims[1];
+            if (channels !== expectedChannels) {
+                throw new Error(`模型輸出通道為 ${channels}，設定預期 ${expectedChannels}`);
+            }
+            const scale = config.boxesNormalized ? 1 : config.inputSize;
+            const scoreStart = config.hasObjectness ? 5 : 4;
+            const candidates = [];
+            for (let anchor = 0; anchor < anchors; anchor++) {
+                const objectness = config.hasObjectness
+                    ? tensorValue(output.data, channelsFirst, channels, anchors, 4, anchor)
+                    : 1;
+                let bestScore = 0;
+                let bestClass = -1;
+                config.targetClassIds.forEach(classId => {
+                    const classScore = tensorValue(output.data, channelsFirst, channels, anchors, scoreStart + classId, anchor) * objectness;
+                    if (classScore > bestScore) {
+                        bestScore = classScore;
+                        bestClass = classId;
+                    }
+                });
+                if (bestScore < config.scoreThreshold) continue;
+                const centerX = tensorValue(output.data, channelsFirst, channels, anchors, 0, anchor) / scale;
+                const centerY = tensorValue(output.data, channelsFirst, channels, anchors, 1, anchor) / scale;
+                const width = tensorValue(output.data, channelsFirst, channels, anchors, 2, anchor) / scale;
+                const height = tensorValue(output.data, channelsFirst, channels, anchors, 3, anchor) / scale;
+                candidates.push(normalizedRegion({
+                    x: centerX - width / 2,
+                    y: centerY - height / 2,
+                    width,
+                    height,
+                    source: 'model',
+                    confidence: bestScore,
+                    classId: bestClass
+                }));
+            }
+            const selected = [];
+            candidates.sort((a, b) => b.confidence - a.confidence).forEach(candidate => {
+                if (candidate.width <= 0 || candidate.height <= 0) return;
+                if (selected.every(existing => detectionIoU(candidate, existing) < config.iouThreshold)) selected.push(candidate);
+            });
+            return selected;
+        }
+
+        async function runCensorDetection() {
+            const image = getActiveCensorImage();
+            if (!image || !censorSession || !censorModelConfig || !censorSourceImage) return;
+            const button = document.getElementById('runCensorDetectionBtn');
+            button.disabled = true;
+            setCensorModelStatus('正在此瀏覽器內分析目前圖片…');
+            try {
+                const size = censorModelConfig.inputSize;
+                const inputCanvas = document.createElement('canvas');
+                inputCanvas.width = size;
+                inputCanvas.height = size;
+                const inputContext = inputCanvas.getContext('2d', { willReadFrequently: true });
+                inputContext.drawImage(censorSourceImage, 0, 0, size, size);
+                const pixels = inputContext.getImageData(0, 0, size, size).data;
+                const tensorData = new Float32Array(3 * size * size);
+                for (let index = 0; index < size * size; index++) {
+                    tensorData[index] = pixels[index * 4] / 255;
+                    tensorData[size * size + index] = pixels[index * 4 + 1] / 255;
+                    tensorData[size * size * 2 + index] = pixels[index * 4 + 2] / 255;
+                }
+                const runtime = await ensureOrtRuntime();
+                const inputName = censorSession.inputNames[0];
+                const results = await censorSession.run({
+                    [inputName]: new runtime.Tensor('float32', tensorData, [1, 3, size, size])
+                });
+                const output = results[censorSession.outputNames[0]];
+                const detections = parseYoloDetections(output, censorModelConfig);
+                const manualRegions = image.censorRegions.filter(region => region.source !== 'model');
+                image.censorRegions = [...manualRegions, ...detections];
+                image.censorSettings = getCensorSettingsFromControls();
+                invalidateCensoredBlob(image);
+                refreshImagePreview(image, image.file);
+                updateCensorBadge(image);
+                updateCensorRegionStatus(detections.length
+                    ? `模型提出 ${detections.length} 個黃色候選框；請逐一覆核並補上漏檢。`
+                    : '模型沒有找到超過信心門檻的候選框；請改用手動框選。');
+                setCensorModelStatus(`偵測完成：${detections.length} 個候選框。`, 'ready');
+                renderCensorCanvas();
+            } catch (error) {
+                setCensorModelStatus(`偵測失敗：${error.message}`, 'error');
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        async function getExportBlob(image, needClean) {
+            if (image.censorRegions?.length) return renderCensoredBlob(image);
+            return needClean ? cleanImageMetadata(image.file) : image.file;
+        }
+
         // === 匯出邏輯 ===
+        function buildExportPlan(prefix, suffix, padZero) {
+            const items = images.map((imgObj, index) => ({
+                imgObj,
+                index,
+                originalName: imgObj.file.name,
+                newName: buildOutputName(imgObj, index, prefix, suffix, padZero),
+                size: imgObj.file.size
+            }));
+            const names = new Map();
+            const duplicates = new Set();
+            items.forEach(item => {
+                const key = item.newName.toLocaleLowerCase();
+                if (names.has(key)) duplicates.add(item.newName);
+                names.set(key, true);
+            });
+            return {
+                items,
+                duplicates: Array.from(duplicates),
+                totalBytes: items.reduce((sum, item) => sum + item.size, 0)
+            };
+        }
+
+        function updateProgress(percent) {
+            const value = Math.max(0, Math.min(100, Math.round(percent)));
+            document.getElementById('progressBar').style.width = `${value}%`;
+            document.getElementById('progressBarContainer').setAttribute('aria-valuenow', String(value));
+        }
+
+        function formatExportTimestamp(date = new Date()) {
+            const part = value => String(value).padStart(2, '0');
+            return `${date.getFullYear()}${part(date.getMonth() + 1)}${part(date.getDate())}_${part(date.getHours())}${part(date.getMinutes())}${part(date.getSeconds())}`;
+        }
+
+        async function directoryExists(parentHandle, name) {
+            try {
+                await parentHandle.getDirectoryHandle(name);
+                return true;
+            } catch (error) {
+                if (error.name === 'NotFoundError') return false;
+                throw error;
+            }
+        }
+
+        async function createUniqueExportDirectory(parentHandle) {
+            const baseName = `Renamed_Export_${formatExportTimestamp()}`;
+            for (let attempt = 0; attempt < 100; attempt++) {
+                const name = attempt === 0 ? baseName : `${baseName}_${attempt + 1}`;
+                if (!(await directoryExists(parentHandle, name))) {
+                    return {
+                        name,
+                        handle: await parentHandle.getDirectoryHandle(name, { create: true })
+                    };
+                }
+            }
+            throw new Error('無法建立不重複的匯出資料夾');
+        }
+
         async function smartExport() {
             if (images.length === 0) {
-                showModal("提示", "工作區是空的，沒有圖片可以匯出。");
+                showModal('提示', '工作區是空的，沒有圖片可以匯出。');
                 return;
             }
 
             const btn = document.getElementById('exportBtn');
             const originalContent = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = `<svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> 處理中...`;
-
             const prefix = prefixInput.value.trim();
             const suffix = suffixInput.value.trim();
             const padZero = padZeroCheckbox.checked;
             const needClean = cleanMetaCheckbox.checked;
+
             if (hasInvalidFilenameCharacters(prefix) || hasInvalidFilenameCharacters(suffix)) {
-                btn.disabled = false;
-                btn.innerHTML = originalContent;
-                showModal("命名規則無效", "前綴或後綴不可包含 < > : \" / \\ | ? * 等檔名字元。");
+                showModal('命名規則無效', '前綴或後綴不可包含 < > : " / \\ | ? * 等檔名字元。');
                 return;
             }
 
+            const plan = buildExportPlan(prefix, suffix, padZero);
+            if (plan.duplicates.length) {
+                showModal('檔名衝突', `發現 ${plan.duplicates.length} 個重複輸出檔名，請先修改命名規則。`);
+                return;
+            }
+
+            btn.disabled = true;
+            const confirmed = await showExportPreview(plan, needClean);
+            if (!confirmed) {
+                btn.disabled = false;
+                return;
+            }
+
+            btn.innerHTML = `<svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> 處理中...`;
 
             try {
-                // 嘗試使用 File System Access API
-                if (!('showDirectoryPicker' in window)) throw new Error("FORCE_ZIP");
+                if (!('showDirectoryPicker' in window)) throw new Error('FORCE_ZIP');
 
                 let targetDirHandle;
-                // 如果已經鎖定來源資料夾，嘗試取得寫入權限
                 if (sourceDirectoryHandle) {
                     try {
                         const perm = await sourceDirectoryHandle.requestPermission({ mode: 'readwrite' });
                         if (perm === 'granted') targetDirHandle = sourceDirectoryHandle;
-                        else throw new Error("Permission denied");
-                    } catch (e) {
-                        // 權限失敗則另選
+                        else throw new Error('Permission denied');
+                    } catch (error) {
                         targetDirHandle = await window.showDirectoryPicker({ mode: 'readwrite', startIn: 'pictures' });
                     }
                 } else {
                     targetDirHandle = await window.showDirectoryPicker({ mode: 'readwrite', startIn: 'pictures' });
                 }
 
-                showModal("處理中", needClean ? "正在清洗隱私資訊並寫入..." : "正在重新命名並寫入...", true);
-                const progressBar = document.getElementById('progressBar');
-                const newDirHandle = await targetDirHandle.getDirectoryHandle('Renamed_Export', { create: true });
+                showModal('處理中', needClean ? '正在清洗隱私資訊並寫入全新資料夾...' : '正在重新命名並寫入全新資料夾...', true);
+                const exportDirectory = await createUniqueExportDirectory(targetDirHandle);
 
-                for (let i = 0; i < images.length; i++) {
-                    const imgObj = images[i];
-                    const newName = buildOutputName(imgObj, i, prefix, suffix, padZero);
-                    
-                    const fileHandle = await newDirHandle.getFileHandle(newName, { create: true });
+                for (let i = 0; i < plan.items.length; i++) {
+                    const item = plan.items[i];
+                    const fileHandle = await exportDirectory.handle.getFileHandle(item.newName, { create: true });
                     const writable = await fileHandle.createWritable();
-                    
-                    if (needClean) {
-                        const cleanBlob = await cleanImageMetadata(imgObj.file);
-                        await writable.write(cleanBlob);
-                    } else {
-                        await writable.write(imgObj.file);
+                    try {
+                        const output = await getExportBlob(item.imgObj, needClean);
+                        await writable.write(output);
+                    } finally {
+                        await writable.close();
                     }
-                    
-                    await writable.close();
-
-                    const percent = Math.round(((i + 1) / images.length) * 100);
-                    progressBar.style.width = `${percent}%`;
+                    updateProgress(((i + 1) / plan.items.length) * 100);
                 }
-                
-                closeModal();
-                showModal("匯出成功", `所有圖片已儲存至 "${targetDirHandle.name}/Renamed_Export" 資料夾。`);
 
-                // Success modal remains visible until the user closes it.
+                closeModal();
+                showModal('匯出成功', `已建立全新資料夾「${targetDirHandle.name}/${exportDirectory.name}」，沒有覆蓋任何舊檔案。`);
             } catch (err) {
                 closeModal();
-                if (err.name === 'AbortError') { 
+                if (err.name === 'AbortError') {
                     // 使用者取消，不做事
-                } 
-                else if (err.name === 'SecurityError' || err.message.includes('Cross origin') || err.message === 'FORCE_ZIP') {
-                    // Fallback to ZIP
-                    console.warn("API 限制，切換為 ZIP 下載");
-                    await downloadAsZip(prefix, suffix, padZero, needClean);
+                } else if (err.name === 'SecurityError' || err.message.includes('Cross origin') || err.message === 'FORCE_ZIP') {
+                    await downloadAsZip(plan, needClean);
                 } else {
                     console.error(err);
-                    if(confirm("寫入資料夾失敗 (" + err.message + ")，是否改為下載 ZIP 檔？")) {
-                        await downloadAsZip(prefix, suffix, padZero, needClean);
+                    if (confirm(`寫入資料夾失敗 (${err.message})，是否改為下載 ZIP 檔？`)) {
+                        await downloadAsZip(plan, needClean);
                     }
                 }
             } finally {
@@ -1301,72 +2231,119 @@
             }
         }
 
-        async function downloadAsZip(prefix, suffix, padZero, needClean) {
-            showModal("打包下載中", needClean ? "正在清洗資訊並壓縮..." : "正在壓縮圖片...", true);
-            const progressBar = document.getElementById('progressBar');
+        async function downloadAsZip(plan, needClean) {
+            if (typeof JSZip !== 'function' || typeof saveAs !== 'function') {
+                showModal('離線元件載入失敗', 'ZIP 元件未能載入，請確認 rename-assets 資料夾與 Rename.html 放在同一位置。');
+                return;
+            }
+
+            showModal('打包下載中', needClean ? '正在清洗資訊並壓縮...' : '正在壓縮圖片...', true);
             try {
                 const zip = new JSZip();
-                const folder = zip.folder("Renamed_Images");
-                
-                for (let i = 0; i < images.length; i++) {
-                    const imgObj = images[i];
-                    const newName = buildOutputName(imgObj, i, prefix, suffix, padZero);
-                    
-                    if (needClean) {
-                        const cleanBlob = await cleanImageMetadata(imgObj.file);
-                        folder.file(newName, cleanBlob);
-                    } else {
-                        folder.file(newName, imgObj.file);
-                    }
-                    
-                    const percent = Math.round(((i + 1) / images.length) * 100);
-                    progressBar.style.width = `${percent}%`;
+                const folder = zip.folder('Renamed_Images');
+
+                for (let i = 0; i < plan.items.length; i++) {
+                    const item = plan.items[i];
+                    const output = await getExportBlob(item.imgObj, needClean);
+                    folder.file(item.newName, output);
+                    updateProgress(((i + 1) / plan.items.length) * 55);
                 }
-                
-                const content = await zip.generateAsync({type: "blob"});
-                saveAs(content, "Renamed_Images.zip");
+
+                const content = await zip.generateAsync({ type: 'blob' }, metadata => {
+                    updateProgress(55 + metadata.percent * 0.45);
+                });
+                saveAs(content, `Renamed_Images_${formatExportTimestamp()}.zip`);
                 closeModal();
-                
+                showModal('ZIP 已建立', '下載已開始；檔名包含時間，避免覆蓋先前匯出的 ZIP。');
             } catch (zipErr) {
                 closeModal();
-                alert("ZIP 打包失敗: " + zipErr.message);
+                showModal('ZIP 打包失敗', zipErr.message);
             }
         }
 
         // === Modal 視窗控制 ===
         const modalOverlay = document.getElementById('modalOverlay');
         const modalBox = document.getElementById('modalBox');
-        
-        function showModal(title, msg, showProgress = false) {
+        const modalTitle = document.getElementById('modalTitle');
+        const modalMsg = document.getElementById('modalMsg');
+        const modalConfirmBtn = document.getElementById('modalConfirmBtn');
+        const modalCancelBtn = document.getElementById('modalCancelBtn');
+        const exportPreviewContainer = document.getElementById('exportPreviewContainer');
+        const exportPreviewBody = document.getElementById('exportPreviewBody');
+
+        function openModal() {
             if (modalCloseTimer) {
                 clearTimeout(modalCloseTimer);
                 modalCloseTimer = null;
             }
-            document.getElementById('modalTitle').innerText = title;
-            document.getElementById('modalMsg').innerText = msg;
-            
-            const pBar = document.getElementById('progressBarContainer');
-            const confirmBtn = document.getElementById('modalConfirmBtn');
-            const cancelBtn = document.getElementById('modalCancelBtn');
-
-            if (showProgress) {
-                pBar.classList.remove('hidden');
-                document.getElementById('progressBar').style.width = '0%';
-                confirmBtn.classList.add('hidden');
-                cancelBtn.classList.add('hidden');
-            } else {
-                pBar.classList.add('hidden');
-                confirmBtn.classList.remove('hidden');
-                // 簡單提示框不需要取消按鈕，除非是 Confirm (本例簡化為 Alert)
-            }
-
             modalOverlay.classList.remove('hidden');
-            // 動畫
             setTimeout(() => {
                 modalOverlay.classList.remove('opacity-0');
                 modalBox.classList.remove('scale-95');
                 modalBox.classList.add('scale-100');
             }, 10);
+        }
+
+        function showExportPreview(plan, needClean) {
+            return new Promise(resolve => {
+                lastModalFocus = document.activeElement;
+                modalDecisionResolver = resolve;
+                modalTitle.textContent = '匯出前預覽';
+                modalMsg.textContent = `共 ${plan.items.length} 張，原始大小 ${formatBytes(plan.totalBytes)}${needClean ? '；將重新編碼並清除 Metadata' : ''}。資料夾匯出會自動建立全新目錄，避免覆蓋舊檔。`;
+                document.getElementById('progressBarContainer').classList.add('hidden');
+                exportPreviewContainer.classList.remove('hidden');
+                exportPreviewBody.innerHTML = '';
+
+                const fragment = document.createDocumentFragment();
+                plan.items.forEach((item, index) => {
+                    const row = document.createElement('tr');
+                    row.className = 'hover:bg-slate-800/60';
+                    const values = [String(index + 1), item.originalName, item.newName, formatBytes(item.size)];
+                    values.forEach((value, columnIndex) => {
+                        const cell = document.createElement('td');
+                        cell.className = `px-3 py-2 ${columnIndex === 2 ? 'font-mono text-indigo-300' : 'text-slate-300'} ${columnIndex === 3 ? 'text-right whitespace-nowrap' : 'break-all'}`;
+                        cell.textContent = value;
+                        row.appendChild(cell);
+                    });
+                    fragment.appendChild(row);
+                });
+                exportPreviewBody.appendChild(fragment);
+
+                modalCancelBtn.classList.remove('hidden');
+                modalConfirmBtn.classList.remove('hidden');
+                modalConfirmBtn.textContent = '確認匯出';
+                openModal();
+                setTimeout(() => modalConfirmBtn.focus(), 30);
+            });
+        }
+
+        function showModal(title, msg, showProgress = false) {
+            if (modalDecisionResolver) {
+                const resolve = modalDecisionResolver;
+                modalDecisionResolver = null;
+                resolve(false);
+            }
+            lastModalFocus = document.activeElement;
+            modalTitle.textContent = title;
+            modalMsg.textContent = msg;
+            exportPreviewContainer.classList.add('hidden');
+            exportPreviewBody.innerHTML = '';
+
+            const progressContainer = document.getElementById('progressBarContainer');
+            if (showProgress) {
+                progressContainer.classList.remove('hidden');
+                updateProgress(0);
+                modalConfirmBtn.classList.add('hidden');
+                modalCancelBtn.classList.add('hidden');
+            } else {
+                progressContainer.classList.add('hidden');
+                modalConfirmBtn.classList.remove('hidden');
+                modalCancelBtn.classList.add('hidden');
+                modalConfirmBtn.textContent = '確定';
+            }
+
+            openModal();
+            if (!showProgress) setTimeout(() => modalConfirmBtn.focus(), 30);
         }
 
         function closeModal() {
@@ -1376,14 +2353,41 @@
             modalCloseTimer = setTimeout(() => {
                 modalOverlay.classList.add('hidden');
                 modalCloseTimer = null;
+                lastModalFocus?.focus?.();
+                lastModalFocus = null;
             }, 200);
         }
+
+        function settleModalDecision(value) {
+            const resolve = modalDecisionResolver;
+            modalDecisionResolver = null;
+            closeModal();
+            if (resolve) resolve(value);
+        }
+
+        modalConfirmBtn.addEventListener('click', () => {
+            if (modalDecisionResolver) settleModalDecision(true);
+            else closeModal();
+        });
+        modalCancelBtn.addEventListener('click', () => settleModalDecision(false));
+        document.addEventListener('keydown', event => {
+            if (event.key !== 'Escape' || modalOverlay.classList.contains('hidden')) return;
+            if (!document.getElementById('progressBarContainer').classList.contains('hidden')) return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            if (modalDecisionResolver) settleModalDecision(false);
+            else closeModal();
+        }, true);
 
         window.addEventListener('beforeunload', () => {
             images.forEach(releasePreviewUrl);
         });
 
-        initSortable();
+        if (typeof Sortable === 'function') {
+            initSortable();
+        } else {
+            showModal('離線元件載入失敗', '排序元件未能載入，請確認 rename-assets 資料夾與 Rename.html 放在同一位置。');
+        }
     </script>
 </body>
 </html>
