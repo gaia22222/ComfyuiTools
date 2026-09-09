@@ -1,8 +1,8 @@
 {
   "inputSize": 640,
-  "labels": ["genital", "nipple", "anus"],
-  "targetLabels": ["genital", "nipple", "anus"],
-  "scoreThreshold": 0.45,
+  "labels": ["nipple_f", "penis", "pussy"],
+  "targetLabels": ["nipple_f", "penis", "pussy"],
+  "scoreThreshold": 0.278,
   "iouThreshold": 0.45,
   "hasObjectness": false,
   "boxesNormalized": false,

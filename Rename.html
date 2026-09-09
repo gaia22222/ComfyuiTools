@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Image Sorter Pro V29</title>
+    <title>Image Sorter Pro V30</title>
     
     <!-- Offline assets: the tool remains fully usable without an Internet connection. -->
     <link rel="stylesheet" href="rename-assets/tailwind.min.css">
@@ -665,12 +665,13 @@
                 </div>
 
                 <details class="censor-section">
-                    <summary class="cursor-pointer text-xs font-bold tracking-wider text-amber-300">自動偵測（需額外模型）</summary>
-                    <p class="text-xs text-slate-400 leading-relaxed mt-3">純前端推理需要另行提供 ONNX Runtime Web、相容的 YOLO 偵測模型與 JSON 設定。模型準確度取決於訓練資料；輸出前仍應逐張覆核。</p>
+                    <summary class="cursor-pointer text-xs font-bold tracking-wider text-amber-300">自動偵測（已內置漫畫模型）</summary>
+                    <p class="text-xs text-slate-400 leading-relaxed mt-3">選好圖片後按一下即可。首次使用會從本站載入約 24 MB 的模型與推理元件；圖片只在此瀏覽器內分析，不會上傳。</p>
+                    <button id="runCensorDetectionBtn" class="censor-action primary w-full mt-3" type="button" onclick="runCensorDetection()">自動偵測目前圖片</button>
+                    <div id="censorModelStatus" class="censor-status">內置模型已備妥；首次偵測時會自動載入。模型結果是候選框，輸出前仍應逐張覆核。</div>
+                    <p class="text-[11px] text-slate-500 leading-relaxed mt-3">內置模型辨識女性乳頭、陰莖及陰部。極端角度、遮擋或特殊畫風仍可能漏檢。</p>
                     <input id="censorModelInput" type="file" accept=".onnx,.json,application/json" multiple class="hidden">
-                    <button class="censor-action w-full mt-3" type="button" onclick="document.getElementById('censorModelInput').click()">載入 ONNX + JSON</button>
-                    <button id="runCensorDetectionBtn" class="censor-action w-full mt-2" type="button" onclick="runCensorDetection()" disabled>偵測目前圖片</button>
-                    <div id="censorModelStatus" class="censor-status">尚未載入。部署者需加入 <code>rename-assets/onnxruntime-web/</code> runtime；模型由使用者在本機選取，不會上傳。</div>
+                    <button class="censor-action w-full mt-3" type="button" onclick="document.getElementById('censorModelInput').click()">進階：載入自訂 ONNX + JSON</button>
                 </details>
             </aside>
         </div>
@@ -738,6 +739,8 @@
         let ortRuntimePromise = null;
         let censorCompareOriginal = false;
         let censorTool = 'draw';
+        const BUNDLED_CENSOR_MODEL_URL = 'rename-assets/censor-model/censor_detect_v1.0_n.onnx';
+        const BUNDLED_CENSOR_CONFIG_URL = 'rename-assets/censor-model/model-config.json';
         const CENSOR_SETTINGS_KEY = 'image-sorter-pro:censor-settings:v1';
         const DEFAULT_CENSOR_SETTINGS = Object.freeze({ style: 'mosaic', strength: 16, expansion: 8 });
         let censorGlobalSettings = loadStoredCensorSettings();
@@ -1668,14 +1671,20 @@
         }
 
         function normalizedRegion(region) {
-            const x = region.width < 0 ? region.x + region.width : region.x;
-            const y = region.height < 0 ? region.y + region.height : region.y;
+            const left = region.width < 0 ? region.x + region.width : region.x;
+            const right = region.width < 0 ? region.x : region.x + region.width;
+            const top = region.height < 0 ? region.y + region.height : region.y;
+            const bottom = region.height < 0 ? region.y : region.y + region.height;
+            const x = Math.max(0, Math.min(1, left));
+            const y = Math.max(0, Math.min(1, top));
+            const clampedRight = Math.max(0, Math.min(1, right));
+            const clampedBottom = Math.max(0, Math.min(1, bottom));
             return {
                 ...region,
-                x: Math.max(0, Math.min(1, x)),
-                y: Math.max(0, Math.min(1, y)),
-                width: Math.max(0, Math.min(1 - x, Math.abs(region.width))),
-                height: Math.max(0, Math.min(1 - y, Math.abs(region.height)))
+                x,
+                y,
+                width: Math.max(0, clampedRight - x),
+                height: Math.max(0, clampedBottom - y)
             };
         }
 
@@ -2021,20 +2030,20 @@
             if (ortRuntimePromise) return ortRuntimePromise;
             ortRuntimePromise = new Promise((resolve, reject) => {
                 const script = document.createElement('script');
-                script.src = 'rename-assets/onnxruntime-web/ort.min.js';
+                script.src = 'rename-assets/onnxruntime-web/ort.min.js?v=1.17.3';
                 script.onload = () => {
                     if (!globalThis.ort?.InferenceSession) {
                         reject(new Error('ONNX Runtime Web 載入後沒有可用的 InferenceSession'));
                         return;
                     }
-                    globalThis.ort.env.wasm.wasmPaths = 'rename-assets/onnxruntime-web/';
+                    globalThis.ort.env.wasm.wasmPaths = new URL('rename-assets/onnxruntime-web/', document.baseURI).href;
                     // GitHub Pages cannot add the cross-origin isolation headers
                     // required by SharedArrayBuffer, so use the stable single-thread path.
                     globalThis.ort.env.wasm.numThreads = 1;
                     globalThis.ort.env.wasm.proxy = false;
                     resolve(globalThis.ort);
                 };
-                script.onerror = () => reject(new Error('找不到 ONNX Runtime Web；請先依 README 加入 runtime 檔案'));
+                script.onerror = () => reject(new Error('無法載入內置 ONNX Runtime Web'));
                 document.head.appendChild(script);
             }).catch(error => {
                 ortRuntimePromise = null;
@@ -2061,15 +2070,32 @@
                 scoreThreshold: Number(config.scoreThreshold ?? 0.45),
                 iouThreshold: Number(config.iouThreshold ?? 0.45),
                 hasObjectness: Boolean(config.hasObjectness),
-                boxesNormalized: Boolean(config.boxesNormalized)
+                boxesNormalized: Boolean(config.boxesNormalized),
+                resizeMode: config.resizeMode === 'letterbox' ? 'letterbox' : 'stretch'
             };
+        }
+
+        async function loadBundledCensorModel() {
+            if (censorSession && censorModelConfig) return;
+            setCensorModelStatus('首次使用：正在載入內置漫畫模型與推理元件…');
+            const [configResponse, modelResponse, runtime] = await Promise.all([
+                fetch(BUNDLED_CENSOR_CONFIG_URL),
+                fetch(BUNDLED_CENSOR_MODEL_URL),
+                ensureOrtRuntime()
+            ]);
+            if (!configResponse.ok) throw new Error(`模型設定下載失敗（HTTP ${configResponse.status}）`);
+            if (!modelResponse.ok) throw new Error(`內置模型下載失敗（HTTP ${modelResponse.status}）`);
+            const config = validateCensorModelConfig(await configResponse.json());
+            const modelBuffer = await modelResponse.arrayBuffer();
+            censorSession = await runtime.InferenceSession.create(modelBuffer, { executionProviders: ['wasm'] });
+            censorModelConfig = config;
+            setCensorModelStatus('內置漫畫模型已載入；之後可直接偵測其他圖片。', 'ready');
         }
 
         censorModelInput.addEventListener('change', async event => {
             const files = Array.from(event.target.files || []);
             const modelFile = files.find(file => /\.onnx$/i.test(file.name));
             const configFile = files.find(file => /\.json$/i.test(file.name));
-            document.getElementById('runCensorDetectionBtn').disabled = true;
             if (!modelFile || !configFile) {
                 setCensorModelStatus('請同時選取一個 .onnx 模型與一個 .json 設定檔。', 'error');
                 return;
@@ -2080,7 +2106,6 @@
                 const runtime = await ensureOrtRuntime();
                 censorSession = await runtime.InferenceSession.create(await modelFile.arrayBuffer(), { executionProviders: ['wasm'] });
                 censorModelConfig = config;
-                document.getElementById('runCensorDetectionBtn').disabled = false;
                 setCensorModelStatus(`已載入 ${modelFile.name}；輸入 ${config.inputSize}×${config.inputSize}，目標類別 ${config.targetClassIds.length} 個。`, 'ready');
             } catch (error) {
                 censorSession = null;
@@ -2105,7 +2130,7 @@
             return union > 0 ? intersection / union : 0;
         }
 
-        function parseYoloDetections(output, config) {
+        function parseYoloDetections(output, config, transform = null) {
             if (!output?.dims || output.dims.length !== 3 || output.dims[0] !== 1) {
                 throw new Error('只支援三維 YOLO raw detection 輸出 [1, channels, anchors] 或 [1, anchors, channels]');
             }
@@ -2116,7 +2141,7 @@
             if (channels !== expectedChannels) {
                 throw new Error(`模型輸出通道為 ${channels}，設定預期 ${expectedChannels}`);
             }
-            const scale = config.boxesNormalized ? 1 : config.inputSize;
+            const coordinateScale = config.boxesNormalized ? config.inputSize : 1;
             const scoreStart = config.hasObjectness ? 5 : 4;
             const candidates = [];
             for (let anchor = 0; anchor < anchors; anchor++) {
@@ -2133,15 +2158,19 @@
                     }
                 });
                 if (bestScore < config.scoreThreshold) continue;
-                const centerX = tensorValue(output.data, channelsFirst, channels, anchors, 0, anchor) / scale;
-                const centerY = tensorValue(output.data, channelsFirst, channels, anchors, 1, anchor) / scale;
-                const width = tensorValue(output.data, channelsFirst, channels, anchors, 2, anchor) / scale;
-                const height = tensorValue(output.data, channelsFirst, channels, anchors, 3, anchor) / scale;
+                const centerX = tensorValue(output.data, channelsFirst, channels, anchors, 0, anchor) * coordinateScale;
+                const centerY = tensorValue(output.data, channelsFirst, channels, anchors, 1, anchor) * coordinateScale;
+                const width = tensorValue(output.data, channelsFirst, channels, anchors, 2, anchor) * coordinateScale;
+                const height = tensorValue(output.data, channelsFirst, channels, anchors, 3, anchor) * coordinateScale;
+                const drawWidth = transform?.drawWidth || config.inputSize;
+                const drawHeight = transform?.drawHeight || config.inputSize;
+                const padX = transform?.padX || 0;
+                const padY = transform?.padY || 0;
                 candidates.push(normalizedRegion({
-                    x: centerX - width / 2,
-                    y: centerY - height / 2,
-                    width,
-                    height,
+                    x: (centerX - width / 2 - padX) / drawWidth,
+                    y: (centerY - height / 2 - padY) / drawHeight,
+                    width: width / drawWidth,
+                    height: height / drawHeight,
                     source: 'model',
                     confidence: bestScore,
                     classId: bestClass
@@ -2157,17 +2186,34 @@
 
         async function runCensorDetection() {
             const image = getActiveCensorImage();
-            if (!image || !censorSession || !censorModelConfig || !censorSourceImage) return;
+            if (!image || !censorSourceImage) return;
             const button = document.getElementById('runCensorDetectionBtn');
             button.disabled = true;
-            setCensorModelStatus('正在此瀏覽器內分析目前圖片…');
             try {
+                if (!censorSession || !censorModelConfig) await loadBundledCensorModel();
+                setCensorModelStatus('正在此瀏覽器內分析目前圖片…');
                 const size = censorModelConfig.inputSize;
                 const inputCanvas = document.createElement('canvas');
                 inputCanvas.width = size;
                 inputCanvas.height = size;
                 const inputContext = inputCanvas.getContext('2d', { willReadFrequently: true });
-                inputContext.drawImage(censorSourceImage, 0, 0, size, size);
+                let transform = { padX: 0, padY: 0, drawWidth: size, drawHeight: size };
+                if (censorModelConfig.resizeMode === 'letterbox') {
+                    const ratio = Math.min(size / censorSourceImage.naturalWidth, size / censorSourceImage.naturalHeight);
+                    const drawWidth = Math.max(1, Math.round(censorSourceImage.naturalWidth * ratio));
+                    const drawHeight = Math.max(1, Math.round(censorSourceImage.naturalHeight * ratio));
+                    transform = {
+                        padX: Math.floor((size - drawWidth) / 2),
+                        padY: Math.floor((size - drawHeight) / 2),
+                        drawWidth,
+                        drawHeight
+                    };
+                    inputContext.fillStyle = 'rgb(114, 114, 114)';
+                    inputContext.fillRect(0, 0, size, size);
+                    inputContext.drawImage(censorSourceImage, transform.padX, transform.padY, drawWidth, drawHeight);
+                } else {
+                    inputContext.drawImage(censorSourceImage, 0, 0, size, size);
+                }
                 const pixels = inputContext.getImageData(0, 0, size, size).data;
                 const tensorData = new Float32Array(3 * size * size);
                 for (let index = 0; index < size * size; index++) {
@@ -2181,7 +2227,7 @@
                     [inputName]: new runtime.Tensor('float32', tensorData, [1, 3, size, size])
                 });
                 const output = results[censorSession.outputNames[0]];
-                const detections = parseYoloDetections(output, censorModelConfig);
+                const detections = parseYoloDetections(output, censorModelConfig, transform);
                 const manualRegions = image.censorRegions.filter(region => region.source !== 'model');
                 image.censorRegions = [...manualRegions, ...detections];
                 image.censorSettings = { ...censorGlobalSettings };
