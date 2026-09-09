@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Image Sorter Pro V28</title>
+    <title>Image Sorter Pro V29</title>
     
     <!-- Offline assets: the tool remains fully usable without an Internet connection. -->
     <link rel="stylesheet" href="rename-assets/tailwind.min.css">
@@ -373,6 +373,8 @@
         .censor-action.primary { border-color: #6366f1; background: #4f46e5; color: white; }
         .censor-action.primary:hover { background: #6366f1; }
         .censor-action.danger { border-color: rgba(244, 63, 94, 0.45); color: #fda4af; }
+        .censor-action.active { border-color: #fb7185; background: rgba(190, 24, 93, 0.28); color: #fecdd3; }
+        .censor-action.compare-active { border-color: #34d399; background: rgba(6, 95, 70, 0.45); color: #a7f3d0; }
 
         .censor-status {
             margin-top: 8px;
@@ -610,7 +612,8 @@
                     <div id="censorImageName" class="text-xs text-slate-500 truncate">尚未選取圖片</div>
                 </div>
             </div>
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 flex-wrap justify-end">
+                <button id="censorCompareBtn" class="censor-action" type="button" onclick="toggleCensorCompare()" aria-pressed="false">顯示原圖</button>
                 <button id="censorPrevBtn" class="censor-action" type="button" onclick="navigateCensorImage(-1)" aria-label="上一張">上一張</button>
                 <span id="censorPosition" class="text-xs text-slate-400 min-w-[60px] text-center">0 / 0</span>
                 <button id="censorNextBtn" class="censor-action" type="button" onclick="navigateCensorImage(1)" aria-label="下一張">下一張</button>
@@ -625,7 +628,11 @@
             <aside class="censor-sidebar custom-scrollbar">
                 <div class="censor-section">
                     <h3>MVP · 立即可用</h3>
-                    <p class="text-xs text-slate-400 leading-relaxed mb-3">在圖片上拖曳建立框。輸出以 Canvas 在此瀏覽器內產生，不會把圖片上傳到伺服器。</p>
+                    <p class="text-xs text-slate-400 leading-relaxed mb-3">選擇「手動畫框」後在圖片上拖曳；需要修正時切換「點擊刪框」。輸出以 Canvas 在此瀏覽器內產生，不會上傳圖片。</p>
+                    <div class="grid grid-cols-2 gap-2 mb-3" role="group" aria-label="人手打碼工具">
+                        <button id="censorDrawToolBtn" class="censor-action active" type="button" onclick="setCensorTool('draw')" aria-pressed="true">＋ 手動畫框</button>
+                        <button id="censorEraseToolBtn" class="censor-action" type="button" onclick="setCensorTool('erase')" aria-pressed="false">− 點擊刪框</button>
+                    </div>
                     <label class="text-xs text-slate-400">效果
                         <select id="censorStyle" class="censor-control">
                             <option value="mosaic">馬賽克</option>
@@ -640,6 +647,7 @@
                     <label class="block mt-3 text-xs text-slate-400">向外擴張 <span id="censorExpansionValue" class="text-indigo-300">8 px</span>
                         <input id="censorExpansion" type="range" min="0" max="48" value="8" class="w-full mt-2">
                     </label>
+                    <p class="text-[11px] text-emerald-400 leading-relaxed mt-2">效果設定會同步套用到全部圖片，並保存在此瀏覽器。</p>
                     <div class="grid grid-cols-2 gap-2 mt-4">
                         <button id="censorUndoBtn" class="censor-action" type="button" onclick="undoCensorRegion()">復原一框</button>
                         <button id="censorClearBtn" class="censor-action danger" type="button" onclick="clearCensorRegions()">清除本張</button>
@@ -728,6 +736,11 @@
         let censorSession = null;
         let censorModelConfig = null;
         let ortRuntimePromise = null;
+        let censorCompareOriginal = false;
+        let censorTool = 'draw';
+        const CENSOR_SETTINGS_KEY = 'image-sorter-pro:censor-settings:v1';
+        const DEFAULT_CENSOR_SETTINGS = Object.freeze({ style: 'mosaic', strength: 16, expansion: 8 });
+        let censorGlobalSettings = loadStoredCensorSettings();
 
         // DOM 元素
         const gridContainer = document.getElementById('gridContainer');
@@ -1490,28 +1503,87 @@
             return images.find(image => image.id === activeCensorImageId) || null;
         }
 
-        function getCensorSettingsFromControls() {
+        function normalizeCensorSettings(settings = {}) {
+            const allowedStyles = new Set(['mosaic', 'blur', 'black', 'white']);
+            const strength = Number(settings.strength);
+            const expansion = Number(settings.expansion);
             return {
-                style: censorStyle.value,
-                strength: Number(censorStrength.value),
-                expansion: Number(censorExpansion.value)
+                style: allowedStyles.has(settings.style) ? settings.style : DEFAULT_CENSOR_SETTINGS.style,
+                strength: Number.isFinite(strength) ? Math.max(4, Math.min(48, strength)) : DEFAULT_CENSOR_SETTINGS.strength,
+                expansion: Number.isFinite(expansion) ? Math.max(0, Math.min(48, expansion)) : DEFAULT_CENSOR_SETTINGS.expansion
             };
         }
 
-        function setCensorControls(settings = {}) {
-            censorStyle.value = settings.style || 'mosaic';
-            censorStrength.value = String(settings.strength || 16);
-            censorExpansion.value = String(settings.expansion ?? 8);
+        function loadStoredCensorSettings() {
+            try {
+                return normalizeCensorSettings(JSON.parse(localStorage.getItem(CENSOR_SETTINGS_KEY) || '{}'));
+            } catch {
+                return { ...DEFAULT_CENSOR_SETTINGS };
+            }
+        }
+
+        function persistCensorSettings() {
+            try {
+                localStorage.setItem(CENSOR_SETTINGS_KEY, JSON.stringify(censorGlobalSettings));
+            } catch {
+                // Private browsing or a locked-down browser may block storage.
+            }
+        }
+
+        function getCensorSettingsFromControls() {
+            return normalizeCensorSettings({
+                style: censorStyle.value,
+                strength: Number(censorStrength.value),
+                expansion: Number(censorExpansion.value)
+            });
+        }
+
+        function setCensorControls(settings = censorGlobalSettings) {
+            const normalized = normalizeCensorSettings(settings);
+            censorStyle.value = normalized.style;
+            censorStrength.value = String(normalized.strength);
+            censorExpansion.value = String(normalized.expansion);
             document.getElementById('censorStrengthValue').textContent = censorStrength.value;
             document.getElementById('censorExpansionValue').textContent = `${censorExpansion.value} px`;
         }
 
-        function saveCurrentCensorSettings() {
-            const image = getActiveCensorImage();
-            if (!image) return;
-            image.censorSettings = getCensorSettingsFromControls();
-            invalidateCensoredBlob(image);
+        function saveCurrentCensorSettings(refreshPreviews = false) {
+            censorGlobalSettings = getCensorSettingsFromControls();
+            persistCensorSettings();
+            images.forEach(image => {
+                image.censorSettings = { ...censorGlobalSettings };
+                invalidateCensoredBlob(image);
+                if (refreshPreviews && image.censorRegions?.length) refreshImagePreview(image, image.file);
+            });
             renderCensorCanvas();
+        }
+
+        function setCensorTool(tool) {
+            censorTool = tool === 'erase' ? 'erase' : 'draw';
+            const drawButton = document.getElementById('censorDrawToolBtn');
+            const eraseButton = document.getElementById('censorEraseToolBtn');
+            drawButton.classList.toggle('active', censorTool === 'draw');
+            eraseButton.classList.toggle('active', censorTool === 'erase');
+            drawButton.setAttribute('aria-pressed', String(censorTool === 'draw'));
+            eraseButton.setAttribute('aria-pressed', String(censorTool === 'erase'));
+            censorCanvas.style.cursor = censorTool === 'draw' ? 'crosshair' : 'cell';
+            setCensorCompare(false);
+            updateCensorRegionStatus(censorTool === 'draw'
+                ? '手動畫框模式：在圖片上拖曳建立打碼範圍。'
+                : '點擊刪框模式：點擊粉紅色或黃色框即可移除。');
+        }
+
+        function setCensorCompare(showOriginal) {
+            censorCompareOriginal = Boolean(showOriginal);
+            const button = document.getElementById('censorCompareBtn');
+            button.textContent = censorCompareOriginal ? '返回打碼預覽' : '顯示原圖';
+            button.classList.toggle('compare-active', censorCompareOriginal);
+            button.setAttribute('aria-pressed', String(censorCompareOriginal));
+            renderCensorCanvas();
+        }
+
+        function toggleCensorCompare() {
+            setCensorCompare(!censorCompareOriginal);
         }
 
         function invalidateCensoredBlob(image) {
@@ -1580,11 +1652,12 @@
             document.getElementById('censorPosition').textContent = `${index + 1} / ${images.length}`;
             document.getElementById('censorPrevBtn').disabled = index <= 0;
             document.getElementById('censorNextBtn').disabled = index >= images.length - 1;
-            setCensorControls(image.censorSettings || undefined);
+            setCensorControls(censorGlobalSettings);
             censorSourceImage = await loadImageElement(image.file);
             censorCanvas.width = censorSourceImage.naturalWidth || censorSourceImage.width;
             censorCanvas.height = censorSourceImage.naturalHeight || censorSourceImage.height;
-            renderCensorCanvas();
+            setCensorCompare(false);
+            setCensorTool('draw');
             updateCensorRegionStatus();
         }
 
@@ -1663,9 +1736,10 @@
         function renderCensorCanvas() {
             const image = getActiveCensorImage();
             if (!image || !censorSourceImage || !censorContext) return;
-            const settings = image.censorSettings || getCensorSettingsFromControls();
+            const settings = censorGlobalSettings;
             censorContext.clearRect(0, 0, censorCanvas.width, censorCanvas.height);
             censorContext.drawImage(censorSourceImage, 0, 0, censorCanvas.width, censorCanvas.height);
+            if (censorCompareOriginal) return;
             (image.censorRegions || []).forEach(region => {
                 applyCensorEffect(censorContext, censorSourceImage, region, settings, censorCanvas.width, censorCanvas.height);
                 drawCensorOutline(censorContext, region, region.source === 'model' ? '#fbbf24' : '#fb7185');
@@ -1696,10 +1770,48 @@
             };
         }
 
+        function regionContainsPoint(region, point) {
+            const normalized = normalizedRegion(region);
+            return point.x >= normalized.x
+                && point.x <= normalized.x + normalized.width
+                && point.y >= normalized.y
+                && point.y <= normalized.y + normalized.height;
+        }
+
+        function removeCensorRegionAtPoint(point) {
+            const image = getActiveCensorImage();
+            if (!image?.censorRegions?.length) return;
+            let index = -1;
+            for (let candidate = image.censorRegions.length - 1; candidate >= 0; candidate--) {
+                if (regionContainsPoint(image.censorRegions[candidate], point)) {
+                    index = candidate;
+                    break;
+                }
+            }
+            if (index < 0) {
+                updateCensorRegionStatus('這個位置沒有打碼框；請直接點擊框內。');
+                return;
+            }
+            image.censorRegions.splice(index, 1);
+            invalidateCensoredBlob(image);
+            refreshImagePreview(image, image.file);
+            updateCensorBadge(image);
+            updateCensorRegionStatus();
+            renderCensorCanvas();
+        }
+
         censorCanvas.addEventListener('pointerdown', event => {
             if (!getActiveCensorImage() || event.button !== 0) return;
             event.preventDefault();
+            if (censorCompareOriginal) {
+                setCensorCompare(false);
+                return;
+            }
             const point = canvasPoint(event);
+            if (censorTool === 'erase') {
+                removeCensorRegionAtPoint(point);
+                return;
+            }
             censorPointerStart = point;
             censorDraftRegion = { x: point.x, y: point.y, width: 0, height: 0, source: 'manual' };
             censorCanvas.setPointerCapture(event.pointerId);
@@ -1728,7 +1840,7 @@
                 return;
             }
             image.censorRegions.push(region);
-            image.censorSettings = getCensorSettingsFromControls();
+            image.censorSettings = { ...censorGlobalSettings };
             invalidateCensoredBlob(image);
             refreshImagePreview(image, image.file);
             updateCensorBadge(image);
@@ -1783,7 +1895,7 @@
             }
             targets.forEach(image => {
                 image.censorRegions = source.censorRegions.map(region => ({ ...region, source: 'manual' }));
-                image.censorSettings = { ...(source.censorSettings || getCensorSettingsFromControls()) };
+                image.censorSettings = { ...censorGlobalSettings };
                 invalidateCensoredBlob(image);
                 refreshImagePreview(image, image.file);
                 updateCensorBadge(image);
@@ -1806,7 +1918,7 @@
             canvas.height = source.naturalHeight || source.height;
             const context = canvas.getContext('2d');
             context.drawImage(source, 0, 0, canvas.width, canvas.height);
-            const settings = image.censorSettings || { style: 'mosaic', strength: 16, expansion: 8 };
+            const settings = censorGlobalSettings;
             image.censorRegions.forEach(region => applyCensorEffect(context, source, region, settings, canvas.width, canvas.height));
             const type = SUPPORTED_IMAGE_TYPES.has(image.file.type) ? image.file.type : 'image/png';
             const quality = type === 'image/png' ? undefined : 0.95;
@@ -1862,11 +1974,10 @@
             const image = getActiveCensorImage();
             if (!image) return;
             image.censorRegions = [];
-            image.censorSettings = null;
+            image.censorSettings = { ...censorGlobalSettings };
             invalidateCensoredBlob(image);
             refreshImagePreview(image, image.file);
             updateCensorBadge(image);
-            setCensorControls();
             updateCensorRegionStatus('已還原本張原圖並移除所有打碼框。');
             renderCensorCanvas();
         }
@@ -1877,6 +1988,7 @@
                 document.getElementById('censorExpansionValue').textContent = `${censorExpansion.value} px`;
                 saveCurrentCensorSettings();
             });
+            control.addEventListener('change', () => saveCurrentCensorSettings(true));
         });
 
         document.addEventListener('keydown', event => {
@@ -1884,6 +1996,11 @@
             if (event.key === 'Escape') {
                 event.preventDefault();
                 closeCensorStudio();
+                return;
+            }
+            if (event.key.toLowerCase() === 'c' && !event.target.matches('input, select, textarea')) {
+                event.preventDefault();
+                toggleCensorCompare();
                 return;
             }
             if ((event.key === 'Delete' || event.key === 'Backspace') && !event.target.matches('input, select, textarea')) {
@@ -2067,7 +2184,7 @@
                 const detections = parseYoloDetections(output, censorModelConfig);
                 const manualRegions = image.censorRegions.filter(region => region.source !== 'model');
                 image.censorRegions = [...manualRegions, ...detections];
-                image.censorSettings = getCensorSettingsFromControls();
+                image.censorSettings = { ...censorGlobalSettings };
                 invalidateCensoredBlob(image);
                 refreshImagePreview(image, image.file);
                 updateCensorBadge(image);
