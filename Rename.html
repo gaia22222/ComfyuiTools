@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Image Sorter Pro V31</title>
+    <title>Image Sorter Pro V32</title>
     
     <!-- Offline assets: the tool remains fully usable without an Internet connection. -->
     <link rel="stylesheet" href="rename-assets/tailwind.min.css">
@@ -683,10 +683,18 @@
                         </label>
                     </fieldset>
                     <button id="runCensorDetectionBtn" class="censor-action primary w-full mt-3" type="button" onclick="runCensorDetection()">自動偵測目前圖片</button>
+                    <button id="runAllCensorDetectionBtn" class="censor-action primary w-full mt-2" type="button" onclick="runAllCensorDetection()">一鍵偵測及打碼全部圖片</button>
+                    <button id="stopAllCensorDetectionBtn" class="censor-action danger hidden w-full mt-2" type="button" onclick="stopAllCensorDetection()">完成目前圖片後停止</button>
+                    <div id="censorBatchProgress" class="hidden mt-3" role="progressbar" aria-label="全部圖片自動打碼進度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                        <div class="h-2 overflow-hidden rounded-full bg-slate-700">
+                            <div id="censorBatchProgressBar" class="h-full bg-indigo-500 transition-all" style="width: 0%"></div>
+                        </div>
+                        <div id="censorBatchProgressText" class="mt-2 text-[11px] text-slate-400">等待開始</div>
+                    </div>
                     <div id="censorModelStatus" class="censor-status">內置模型已備妥；首次偵測時會自動載入。模型結果是候選框，輸出前仍應逐張覆核。</div>
                     <p class="text-[11px] text-slate-500 leading-relaxed mt-3">內置模型辨識女性乳頭、陰莖及陰部。極端角度、遮擋或特殊畫風仍可能漏檢。</p>
                     <input id="censorModelInput" type="file" accept=".onnx,.json,application/json" multiple class="hidden">
-                    <button class="censor-action w-full mt-3" type="button" onclick="document.getElementById('censorModelInput').click()">進階：載入自訂 ONNX + JSON</button>
+                    <button id="loadCustomCensorModelBtn" class="censor-action w-full mt-3" type="button" onclick="document.getElementById('censorModelInput').click()">進階：載入自訂 ONNX + JSON</button>
                 </details>
             </aside>
         </div>
@@ -754,6 +762,8 @@
         let ortRuntimePromise = null;
         let censorCompareOriginal = false;
         let censorTool = 'draw';
+        let censorBatchRunning = false;
+        let censorBatchStopRequested = false;
         const BUNDLED_CENSOR_MODEL_URL = 'rename-assets/censor-model/censor_detect_v1.0_n.onnx';
         const BUNDLED_CENSOR_CONFIG_URL = 'rename-assets/censor-model/model-config.json';
         const CENSOR_SETTINGS_KEY = 'image-sorter-pro:censor-settings:v1';
@@ -1591,8 +1601,8 @@
             return true;
         }
 
-        function enabledCensorTargetClassIds(config) {
-            return config.targetClassIds.filter(classId => isCensorLabelEnabled(config.labels[classId]));
+        function enabledCensorTargetClassIds(config, settings = censorGlobalSettings) {
+            return config.targetClassIds.filter(classId => isCensorLabelEnabled(config.labels[classId], settings));
         }
 
         function saveCurrentCensorSettings(refreshPreviews = false) {
@@ -1963,16 +1973,16 @@
             });
         }
 
-        async function renderCensoredBlob(image) {
+        async function renderCensoredBlob(image, preparedSource = null) {
             if (!image.censorRegions?.length) return image.file;
             if (image.censoredBlob) return image.censoredBlob;
-            const source = await loadImageElement(image.file);
+            const source = preparedSource || await loadImageElement(image.file);
             const canvas = document.createElement('canvas');
             canvas.width = source.naturalWidth || source.width;
             canvas.height = source.naturalHeight || source.height;
             const context = canvas.getContext('2d');
             context.drawImage(source, 0, 0, canvas.width, canvas.height);
-            const settings = censorGlobalSettings;
+            const settings = normalizeCensorSettings(image.censorSettings || censorGlobalSettings);
             image.censorRegions.forEach(region => applyCensorEffect(context, source, region, settings, canvas.width, canvas.height));
             const type = SUPPORTED_IMAGE_TYPES.has(image.file.type) ? image.file.type : 'image/png';
             const quality = type === 'image/png' ? undefined : 0.95;
@@ -2093,6 +2103,47 @@
             status.textContent = message;
             status.classList.toggle('ready', state === 'ready');
             status.classList.toggle('error', state === 'error');
+        }
+
+        function setCensorBatchProgress(completed, total, message) {
+            const container = document.getElementById('censorBatchProgress');
+            const bar = document.getElementById('censorBatchProgressBar');
+            const text = document.getElementById('censorBatchProgressText');
+            const percent = total ? Math.round((completed / total) * 100) : 0;
+            container.classList.remove('hidden');
+            container.setAttribute('aria-valuenow', String(percent));
+            bar.style.width = `${percent}%`;
+            text.textContent = message;
+        }
+
+        function setCensorBatchRunning(running) {
+            censorBatchRunning = running;
+            const controls = [
+                document.getElementById('runCensorDetectionBtn'),
+                document.getElementById('runAllCensorDetectionBtn'),
+                document.getElementById('loadCustomCensorModelBtn'),
+                document.getElementById('applyCurrentCensorBtn'),
+                document.getElementById('applyAllCensorBtn'),
+                censorStyle,
+                censorStrength,
+                censorExpansion,
+                censorDetectNipple,
+                censorDetectPenis,
+                censorDetectPussy
+            ];
+            controls.forEach(control => {
+                if (control) control.disabled = running;
+            });
+            document.getElementById('stopAllCensorDetectionBtn').classList.toggle('hidden', !running);
+        }
+
+        function stopAllCensorDetection() {
+            if (!censorBatchRunning) return;
+            censorBatchStopRequested = true;
+            const button = document.getElementById('stopAllCensorDetectionBtn');
+            button.disabled = true;
+            button.textContent = '正在完成目前圖片…';
+            setCensorModelStatus('已要求停止；完成目前圖片後便會結束。');
         }
 
         function ensureOrtRuntime() {
@@ -2255,9 +2306,54 @@
             return selected;
         }
 
+        async function detectCensorRegions(sourceImage, targetClassIds) {
+            const size = censorModelConfig.inputSize;
+            const sourceWidth = sourceImage.naturalWidth || sourceImage.width;
+            const sourceHeight = sourceImage.naturalHeight || sourceImage.height;
+            const inputCanvas = document.createElement('canvas');
+            inputCanvas.width = size;
+            inputCanvas.height = size;
+            const inputContext = inputCanvas.getContext('2d', { willReadFrequently: true });
+            let transform = { padX: 0, padY: 0, drawWidth: size, drawHeight: size };
+            if (censorModelConfig.resizeMode === 'letterbox') {
+                const ratio = Math.min(size / sourceWidth, size / sourceHeight);
+                const drawWidth = Math.max(1, Math.round(sourceWidth * ratio));
+                const drawHeight = Math.max(1, Math.round(sourceHeight * ratio));
+                transform = {
+                    padX: Math.floor((size - drawWidth) / 2),
+                    padY: Math.floor((size - drawHeight) / 2),
+                    drawWidth,
+                    drawHeight
+                };
+                inputContext.fillStyle = 'rgb(114, 114, 114)';
+                inputContext.fillRect(0, 0, size, size);
+                inputContext.drawImage(sourceImage, transform.padX, transform.padY, drawWidth, drawHeight);
+            } else {
+                inputContext.drawImage(sourceImage, 0, 0, size, size);
+            }
+            const pixels = inputContext.getImageData(0, 0, size, size).data;
+            const tensorData = new Float32Array(3 * size * size);
+            for (let index = 0; index < size * size; index++) {
+                tensorData[index] = pixels[index * 4] / 255;
+                tensorData[size * size + index] = pixels[index * 4 + 1] / 255;
+                tensorData[size * size * 2 + index] = pixels[index * 4 + 2] / 255;
+            }
+            const runtime = await ensureOrtRuntime();
+            const inputName = censorSession.inputNames[0];
+            const results = await censorSession.run({
+                [inputName]: new runtime.Tensor('float32', tensorData, [1, 3, size, size])
+            });
+            return parseYoloDetections(
+                results[censorSession.outputNames[0]],
+                censorModelConfig,
+                transform,
+                targetClassIds
+            );
+        }
+
         async function runCensorDetection() {
             const image = getActiveCensorImage();
-            if (!image || !censorSourceImage) return;
+            if (!image || !censorSourceImage || censorBatchRunning) return;
             const button = document.getElementById('runCensorDetectionBtn');
             button.disabled = true;
             try {
@@ -2268,42 +2364,7 @@
                     return;
                 }
                 setCensorModelStatus('正在此瀏覽器內分析目前圖片…');
-                const size = censorModelConfig.inputSize;
-                const inputCanvas = document.createElement('canvas');
-                inputCanvas.width = size;
-                inputCanvas.height = size;
-                const inputContext = inputCanvas.getContext('2d', { willReadFrequently: true });
-                let transform = { padX: 0, padY: 0, drawWidth: size, drawHeight: size };
-                if (censorModelConfig.resizeMode === 'letterbox') {
-                    const ratio = Math.min(size / censorSourceImage.naturalWidth, size / censorSourceImage.naturalHeight);
-                    const drawWidth = Math.max(1, Math.round(censorSourceImage.naturalWidth * ratio));
-                    const drawHeight = Math.max(1, Math.round(censorSourceImage.naturalHeight * ratio));
-                    transform = {
-                        padX: Math.floor((size - drawWidth) / 2),
-                        padY: Math.floor((size - drawHeight) / 2),
-                        drawWidth,
-                        drawHeight
-                    };
-                    inputContext.fillStyle = 'rgb(114, 114, 114)';
-                    inputContext.fillRect(0, 0, size, size);
-                    inputContext.drawImage(censorSourceImage, transform.padX, transform.padY, drawWidth, drawHeight);
-                } else {
-                    inputContext.drawImage(censorSourceImage, 0, 0, size, size);
-                }
-                const pixels = inputContext.getImageData(0, 0, size, size).data;
-                const tensorData = new Float32Array(3 * size * size);
-                for (let index = 0; index < size * size; index++) {
-                    tensorData[index] = pixels[index * 4] / 255;
-                    tensorData[size * size + index] = pixels[index * 4 + 1] / 255;
-                    tensorData[size * size * 2 + index] = pixels[index * 4 + 2] / 255;
-                }
-                const runtime = await ensureOrtRuntime();
-                const inputName = censorSession.inputNames[0];
-                const results = await censorSession.run({
-                    [inputName]: new runtime.Tensor('float32', tensorData, [1, 3, size, size])
-                });
-                const output = results[censorSession.outputNames[0]];
-                const detections = parseYoloDetections(output, censorModelConfig, transform, targetClassIds);
+                const detections = await detectCensorRegions(censorSourceImage, targetClassIds);
                 const manualRegions = image.censorRegions.filter(region => region.source !== 'model');
                 image.censorRegions = [...manualRegions, ...detections];
                 image.censorSettings = { ...censorGlobalSettings };
@@ -2319,6 +2380,71 @@
                 setCensorModelStatus(`偵測失敗：${error.message}`, 'error');
             } finally {
                 button.disabled = false;
+            }
+        }
+
+        async function runAllCensorDetection() {
+            if (censorBatchRunning || !images.length) return;
+            const queue = [...images];
+            const settings = normalizeCensorSettings(getCensorSettingsFromControls());
+            censorGlobalSettings = { ...settings };
+            persistCensorSettings();
+            censorBatchStopRequested = false;
+            setCensorBatchRunning(true);
+            setCensorBatchProgress(0, queue.length, `準備處理 ${queue.length} 張圖片…`);
+            let completed = 0;
+            let failed = 0;
+            let detectedImages = 0;
+            let detectionCount = 0;
+            try {
+                if (!censorSession || !censorModelConfig) await loadBundledCensorModel();
+                const targetClassIds = enabledCensorTargetClassIds(censorModelConfig, settings);
+                if (!targetClassIds.length) {
+                    setCensorModelStatus('未勾選任何自動打碼位置；請勾選至少一項，或使用手動畫框。', 'ready');
+                    setCensorBatchProgress(0, queue.length, '沒有勾選自動打碼位置，未開始處理。');
+                    return;
+                }
+                for (let index = 0; index < queue.length; index++) {
+                    if (censorBatchStopRequested) break;
+                    const image = queue[index];
+                    setCensorBatchProgress(completed, queue.length, `正在分析 ${index + 1} / ${queue.length}：${image.file.name}`);
+                    try {
+                        const source = await loadImageElement(image.file);
+                        const detections = await detectCensorRegions(source, targetClassIds);
+                        const manualRegions = (image.censorRegions || []).filter(region => region.source !== 'model');
+                        image.censorRegions = [...manualRegions, ...detections];
+                        image.censorSettings = { ...settings };
+                        invalidateCensoredBlob(image);
+                        const previewBlob = image.censorRegions.length
+                            ? await renderCensoredBlob(image, source)
+                            : image.file;
+                        refreshImagePreview(image, previewBlob);
+                        updateCensorBadge(image);
+                        if (detections.length) detectedImages++;
+                        detectionCount += detections.length;
+                    } catch (error) {
+                        failed++;
+                        console.warn(`自動打碼失敗：${image.file.name}`, error);
+                    }
+                    completed++;
+                    setCensorBatchProgress(completed, queue.length, `已處理 ${completed} / ${queue.length}`);
+                    await new Promise(resolve => requestAnimationFrame(resolve));
+                }
+                const stopped = censorBatchStopRequested;
+                const summary = `${stopped ? '已停止' : '全部完成'}：處理 ${completed} 張，${detectedImages} 張找到位置，共 ${detectionCount} 個自動框${failed ? `，${failed} 張失敗` : ''}。`;
+                setCensorModelStatus(summary, failed === completed && completed > 0 ? 'error' : 'ready');
+                setCensorBatchProgress(completed, queue.length, summary);
+                updateCensorRegionStatus(`${summary} 請逐張覆核，漏檢位置可用手動畫框。`);
+            } catch (error) {
+                setCensorModelStatus(`全部圖片自動打碼失敗：${error.message}`, 'error');
+                setCensorBatchProgress(completed, queue.length, `處理中止：${error.message}`);
+            } finally {
+                const stopButton = document.getElementById('stopAllCensorDetectionBtn');
+                stopButton.disabled = false;
+                stopButton.textContent = '完成目前圖片後停止';
+                setCensorBatchRunning(false);
+                censorBatchStopRequested = false;
+                renderCensorCanvas();
             }
         }
 
