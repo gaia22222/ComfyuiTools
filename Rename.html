@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Image Sorter Pro V32</title>
+    <title>Image Sorter Pro V33</title>
     
     <!-- Offline assets: the tool remains fully usable without an Internet connection. -->
     <link rel="stylesheet" href="rename-assets/tailwind.min.css">
@@ -261,6 +261,61 @@
         }
 
         .rename-image-card.has-censor .censor-badge { display: block; }
+
+        .metadata-badge {
+            position: absolute;
+            left: 6px;
+            bottom: 6px;
+            z-index: 12;
+            width: 26px;
+            height: 26px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            border-radius: 999px;
+            background: rgba(15, 23, 42, 0.9);
+            color: #94a3b8;
+            box-shadow: 0 2px 5px rgba(15, 23, 42, 0.35);
+            pointer-events: auto;
+        }
+
+        .metadata-badge svg { width: 14px; height: 14px; }
+
+        .metadata-badge::after {
+            content: '?';
+            position: absolute;
+            right: -3px;
+            bottom: -3px;
+            width: 13px;
+            height: 13px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #0f172a;
+            border-radius: 999px;
+            background: #475569;
+            color: white;
+            font-size: 9px;
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        .metadata-badge.has-metadata {
+            border-color: rgba(52, 211, 153, 0.55);
+            background: rgba(6, 78, 59, 0.92);
+            color: #a7f3d0;
+        }
+
+        .metadata-badge.has-metadata::after { content: '✓'; background: #059669; }
+        .metadata-badge.no-metadata::after { content: '×'; background: #64748b; }
+
+        .metadata-badge.metadata-error {
+            border-color: rgba(251, 191, 36, 0.55);
+            color: #fde68a;
+        }
+
+        .metadata-badge.metadata-error::after { content: '!'; background: #d97706; }
 
         #censorStudio {
             position: fixed;
@@ -764,6 +819,7 @@
         let censorTool = 'draw';
         let censorBatchRunning = false;
         let censorBatchStopRequested = false;
+        let metadataInspectionQueue = Promise.resolve();
         const BUNDLED_CENSOR_MODEL_URL = 'rename-assets/censor-model/censor_detect_v1.0_n.onnx';
         const BUNDLED_CENSOR_CONFIG_URL = 'rename-assets/censor-model/model-config.json';
         const CENSOR_SETTINGS_KEY = 'image-sorter-pro:censor-settings:v1';
@@ -1015,6 +1071,86 @@
             );
         }
 
+        function isPngBytes(bytes) {
+            const signature = [137, 80, 78, 71, 13, 10, 26, 10];
+            return bytes.length >= signature.length && signature.every((value, index) => bytes[index] === value);
+        }
+
+        function pngHasComfyMetadata(bytes) {
+            if (!isPngBytes(bytes)) return false;
+            const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+            let offset = 8;
+            while (offset + 12 <= bytes.length) {
+                const chunkLength = view.getUint32(offset, false);
+                const dataStart = offset + 8;
+                const dataEnd = dataStart + chunkLength;
+                if (dataEnd + 4 > bytes.length) break;
+                const chunkType = String.fromCharCode(bytes[offset + 4], bytes[offset + 5], bytes[offset + 6], bytes[offset + 7]);
+                if (chunkType === 'tEXt' || chunkType === 'iTXt' || chunkType === 'zTXt') {
+                    let keywordEnd = dataStart;
+                    while (keywordEnd < dataEnd && bytes[keywordEnd] !== 0) keywordEnd++;
+                    let keyword = '';
+                    for (let index = dataStart; index < keywordEnd; index++) keyword += String.fromCharCode(bytes[index]);
+                    if (keyword.toLowerCase() === 'prompt' || keyword.toLowerCase() === 'workflow') return true;
+                }
+                if (chunkType === 'IEND') break;
+                offset = dataEnd + 4;
+            }
+            return false;
+        }
+
+        function textHasComfyMetadata(text) {
+            const normalized = text.toLowerCase().replaceAll('\0', '');
+            return normalized.includes('comfyui')
+                || (normalized.includes('"workflow"') && normalized.includes('"nodes"'))
+                || normalized.includes('"class_type"');
+        }
+
+        async function fileHasComfyMetadata(file) {
+            const bytes = new Uint8Array(await file.arrayBuffer());
+            if (isPngBytes(bytes)) return pngHasComfyMetadata(bytes);
+            const utf8 = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+            if (textHasComfyMetadata(utf8)) return true;
+            if (bytes.length > 1) {
+                const utf16 = new TextDecoder('utf-16le', { fatal: false }).decode(bytes);
+                if (textHasComfyMetadata(utf16)) return true;
+            }
+            return false;
+        }
+
+        function updateMetadataBadge(image) {
+            const badge = document.getElementById(image.id)?.querySelector('.metadata-badge');
+            if (!badge) return;
+            badge.classList.remove('has-metadata', 'no-metadata', 'metadata-error');
+            if (image.comfyMetadataState === 'present') {
+                badge.classList.add('has-metadata');
+                badge.title = '包含 ComfyUI Metadata';
+                badge.setAttribute('aria-label', '包含 ComfyUI Metadata');
+            } else if (image.comfyMetadataState === 'absent') {
+                badge.classList.add('no-metadata');
+                badge.title = '沒有 ComfyUI Metadata';
+                badge.setAttribute('aria-label', '沒有 ComfyUI Metadata');
+            } else if (image.comfyMetadataState === 'error') {
+                badge.classList.add('metadata-error');
+                badge.title = '無法檢查 ComfyUI Metadata';
+                badge.setAttribute('aria-label', '無法檢查 ComfyUI Metadata');
+            }
+        }
+
+        function queueMetadataInspection(image) {
+            metadataInspectionQueue = metadataInspectionQueue
+                .catch(() => undefined)
+                .then(async () => {
+                    try {
+                        image.comfyMetadataState = await fileHasComfyMetadata(image.file) ? 'present' : 'absent';
+                    } catch (error) {
+                        console.warn(`Metadata 檢查失敗：${image.file.name}`, error);
+                        image.comfyMetadataState = 'error';
+                    }
+                    updateMetadataBadge(image);
+                });
+        }
+
         function resetSourceHandle() {
             sourceDirectoryHandle = null;
             sourceDirBadge.classList.add('hidden');
@@ -1076,6 +1212,7 @@
                     file: file,
                     previewUrl: null,
                     loaded: false,
+                    comfyMetadataState: 'checking',
                     censorRegions: [],
                     censorSettings: null,
                     censoredBlob: null
@@ -1089,6 +1226,7 @@
                 // The card is still inside a detached DocumentFragment here.
                 // Pass the node directly instead of looking it up in document.
                 updateCardImage(card, imgObj.previewUrl);
+                queueMetadataInspection(imgObj);
 
             }
             gridContainer.appendChild(fragment);
@@ -1175,6 +1313,14 @@
             censorBadge.className = 'censor-badge';
             censorBadge.textContent = '已標記';
             div.appendChild(censorBadge);
+
+            const metadataBadge = document.createElement('div');
+            metadataBadge.className = 'metadata-badge';
+            metadataBadge.title = '正在檢查 ComfyUI Metadata…';
+            metadataBadge.setAttribute('role', 'img');
+            metadataBadge.setAttribute('aria-label', '正在檢查 ComfyUI Metadata');
+            metadataBadge.innerHTML = '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5" rx="7" ry="3" stroke-width="1.8"></ellipse><path d="M5 5v6c0 1.7 3.1 3 7 3s7-1.3 7-3V5M5 11v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6" stroke-width="1.8"></path></svg>';
+            div.appendChild(metadataBadge);
 
             // Loading Spinner
             const spinner = document.createElement('div');
@@ -1628,7 +1774,7 @@
             setCensorCompare(false);
             updateCensorRegionStatus(censorTool === 'draw'
                 ? '手動畫框模式：在圖片上拖曳建立打碼範圍。'
-                : '點擊刪框模式：點擊粉紅色或黃色框即可移除。');
+                : '點擊刪框模式：直接點擊已打碼位置即可移除。');
         }
 
         function setCensorCompare(showOriginal) {
@@ -1806,7 +1952,6 @@
             if (censorCompareOriginal) return;
             (image.censorRegions || []).forEach(region => {
                 applyCensorEffect(censorContext, censorSourceImage, region, settings, censorCanvas.width, censorCanvas.height);
-                drawCensorOutline(censorContext, region, region.source === 'model' ? '#fbbf24' : '#fb7185');
             });
             if (censorDraftRegion) drawCensorOutline(censorContext, censorDraftRegion, '#ffffff', true);
         }
@@ -1919,7 +2064,7 @@
             const image = getActiveCensorImage();
             const count = image?.censorRegions?.length || 0;
             const status = document.getElementById('censorRegionStatus');
-            status.textContent = message || (count ? `本張有 ${count} 個打碼框；粉紅色為手動、黃色為模型建議。` : '本張尚未建立打碼框。');
+            status.textContent = message || (count ? `本張有 ${count} 個打碼範圍；為免遮擋圖片，完成後不顯示外框。` : '本張尚未建立打碼框。');
             document.getElementById('censorUndoBtn').disabled = count === 0;
             document.getElementById('censorClearBtn').disabled = count === 0;
         }
@@ -2074,7 +2219,7 @@
                     }
                 });
                 updateCensorRegionStatus(removedCount
-                    ? `已移除 ${removedCount} 個未勾選類別的黃色自動框；人手框已保留。`
+                    ? `已移除 ${removedCount} 個未勾選類別的自動範圍；人手範圍已保留。`
                     : '自動打碼位置已儲存；未勾選的位置可用手動畫框。');
                 renderCensorCanvas();
             });
@@ -2372,7 +2517,7 @@
                 refreshImagePreview(image, image.file);
                 updateCensorBadge(image);
                 updateCensorRegionStatus(detections.length
-                    ? `模型提出 ${detections.length} 個黃色候選框；請逐一覆核並補上漏檢。`
+                    ? `模型提出 ${detections.length} 個候選範圍；請逐一覆核並補上漏檢。`
                     : '模型沒有找到超過信心門檻的候選框；請改用手動框選。');
                 setCensorModelStatus(`偵測完成：${detections.length} 個候選框。`, 'ready');
                 renderCensorCanvas();
