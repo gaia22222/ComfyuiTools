@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: toolhub-media-private
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./video-downloader/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    envVars:
+      - key: MEDIA_MODE
+        value: cloud
+      - key: MEDIA_PASSWORD
+        sync: false
+      - key: MEDIA_MAX_HEIGHT
+        value: "1080"
+      - key: MEDIA_MAX_DURATION
+        value: "1800"
+      - key: MEDIA_MAX_DOWNLOAD_MB
+        value: "200"
+      - key: MEDIA_JOB_TIMEOUT
+        value: "900"
+      - key: MEDIA_RETENTION_SECONDS
+        value: "3600"

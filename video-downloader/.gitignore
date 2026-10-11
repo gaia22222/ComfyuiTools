@@ -1,0 +1,6 @@
+vendor/
+.data/
+downloads/
+bin/
+__pycache__/
+*.log
